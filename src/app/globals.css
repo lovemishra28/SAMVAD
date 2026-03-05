@@ -1,26 +1,452 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Sora:wght@300;400;500;600&display=swap');
+@import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0a0a0a;
+  --surface: #111111;
+  --surface-2: #161616;
+  --border: rgba(255,255,255,0.07);
+  --border-hover: rgba(255,255,255,0.14);
+  --text-primary: #f5f5f3;
+  --text-secondary: #888884;
+  --text-muted: #444440;
+  --accent: #c8ff00;
+  --accent-dim: rgba(200,255,0,0.08);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Sora', sans-serif;
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ── Layout ── */
+
+.outer-container {
+  background-color: var(--bg);
+  overflow: hidden;
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+/* ── Dashboard Header ── */
+
+.dashboard-header {
+  border-bottom: 1px solid var(--border);
+  padding: 18px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── Booth Summary ── */
+
+.booth-summary-card {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+/* ── Insight Stat Boxes ── */
+
+.insight-stat-box {
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 28px 20px;
+  text-align: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.insight-stat-box::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.insight-stat-box:hover {
+  border-color: var(--border-hover);
+  background-color: var(--surface);
+}
+
+.insight-stat-box:hover::after {
+  opacity: 1;
+}
+
+.insight-stat-box p:first-child {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.insight-stat-box p:last-child {
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/* ── Insight Text Box ── */
+
+.insight-text-box {
+  background-color: var(--accent-dim);
+  border: 1px solid rgba(200,255,0,0.12);
+  border-radius: var(--radius-md);
+  padding: 18px 24px;
+  text-align: left;
+  max-width: 100%;
+  margin: 0 auto;
+  margin-top: 25px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.insight-text-box::before {
+  content: '';
+  display: block;
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.insight-text-box p {
+  font-size: 13px;
+  line-height: 1.65;
+  color: rgba(245,245,243,0.75);
+  font-weight: 300;
+}
+
+/* ── Categories Card ── */
+
+.categories-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px 20px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.categories-card h2 {
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-align: left !important;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Categories Grid ── */
+
+.categories-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  flex: 1;
+}
+
+@media (max-width: 768px) {
+  .categories-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ── Category Cards ── */
+
+.category-card {
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 20px 14px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  text-align: left;
+  min-height: 100px;
+  gap: 10px;
+}
+
+.category-card:hover {
+  border-color: var(--border-hover);
+  background-color: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+.category-card:hover h2 {
+  color: var(--accent);
+}
+
+.category-card .text-2xl {
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 0;
+}
+
+.category-card h2 {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+  letter-spacing: 0.01em;
+  transition: color 0.18s ease;
+}
+
+.category-card p {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px !important;
+  color: var(--text-muted) !important;
+  letter-spacing: 0.04em;
+}
+
+/* ── Charts Container ── */
+
+.charts-container {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.chart-wrapper {
+  width: 100%;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-wrapper + .chart-wrapper {
+  border-top: 1px solid var(--border);
+}
+
+.chart-card {
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 18px 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card h2,
+.charts-container h2 {
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-align: left !important;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── General Card ── */
+
+.card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+}
+
+.card h2 {
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inner-card {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 10px 14px;
+  font-size: 12px !important;
+  color: var(--text-secondary) !important;
+  transition: border-color 0.15s;
+}
+
+.inner-card:hover {
+  border-color: var(--border-hover);
+}
+
+/* ── Booth Summary Title ── */
+
+.booth-summary-card h2 {
+  font-size: 11px !important;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary) !important;
+  text-align: left !important;
+  margin-bottom: 24px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Button ── */
+
+.primary-button {
+  background-color: var(--accent);
+  color: #0a0a0a !important;
+  padding: 10px 22px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: 'DM Mono', monospace;
+  transition: opacity 0.2s ease, transform 0.15s ease;
+  border: none;
+}
+
+.primary-button:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+/* ── Recommended Schemes ── */
+
+.card h3 {
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  margin-top: 24px;
+}
+
+.card ul.list-disc li {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+/* ── Scrollbar ── */
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+/* ── Leaflet Map Theme Overrides ── */
+
+.leaflet-container {
+  background: var(--surface) !important;
+  font-family: 'Sora', sans-serif;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--text-muted) !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: var(--accent) !important;
+}
+
+.leaflet-popup-content {
+  color: var(--text-primary) !important;
+  margin: 10px 14px !important;
+  font-family: 'Sora', sans-serif;
+}
+
+.leaflet-popup-content strong {
+  color: var(--accent) !important;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.leaflet-popup-content br + * {
+  color: var(--text-primary) !important;
+}
+
+/* Ensure all text in popup is readable */
+.leaflet-popup-content,
+.leaflet-popup-content * {
+  color: var(--text-primary) !important;
+}
+
+/* ── Booth Selection Form Inputs ── */
+
+.booth-select,
+.booth-input {
+  transition: all 0.25s ease;
+}
+
+.booth-select:hover,
+.booth-input:hover {
+  border-color: rgba(200, 255, 0, 0.3) !important;
+  background: var(--surface-2) !important;
+}
+
+.booth-select:focus,
+.booth-input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(200, 255, 0, 0.1) !important;
+  background: var(--surface-2) !important;
+}
+
+/* Dropdown options styling */
+.booth-select option {
+  background: var(--surface);
+  color: var(--text-primary);
+  padding: 12px;
+  font-family: 'Sora', sans-serif;
+}
+
+.booth-select option:hover,
+.booth-select option:checked {
+  background: var(--accent);
+  color: #0a0a0a;
 }
