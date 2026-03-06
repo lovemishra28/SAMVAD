@@ -223,13 +223,13 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Proceed to Notifications CTA */}
-        <div className="mt-6">
+        {/* CTA Section */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
-            className="flex flex-col sm:flex-row items-center justify-between p-5 rounded-xl"
+            className="flex flex-col items-start justify-between p-5 rounded-xl"
             style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" }}
           >
             <div>
@@ -237,16 +237,41 @@ export default function Dashboard() {
                 Ready to deliver scheme notifications?
               </p>
               <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                Proceed to the Notification Engine to target categories and send alerts
+                Target categories and send alerts via the Notification Engine
               </p>
             </div>
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => router.push("/notifications")}
-              className="primary-button mt-3 sm:mt-0"
+              className="primary-button mt-3"
             >
-              Open Notification Engine →
+              Notification Engine →
+            </motion.button>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+            className="flex flex-col items-start justify-between p-5 rounded-xl"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" }}
+          >
+            <div>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                Manage Government Schemes
+              </p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                Add schemes, launch campaigns, track applications and analytics
+              </p>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => router.push("/schemes")}
+              className="primary-button mt-3"
+            >
+              Scheme Management →
             </motion.button>
           </motion.div>
         </div>

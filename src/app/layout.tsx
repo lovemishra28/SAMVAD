@@ -34,7 +34,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </div>
             </a>
 
-            <BoothIndicator />
+            {/* Navigation Links */}
+            <nav style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <a href="/dashboard" className="nav-link">
+                Dashboard
+              </a>
+              <a href="/schemes" className="nav-link">
+                Schemes
+              </a>
+
+              <BoothIndicator />
+            </nav>
 
           </header>
 

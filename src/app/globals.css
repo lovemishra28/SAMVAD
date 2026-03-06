@@ -47,6 +47,25 @@ body {
   align-items: center;
 }
 
+/* ── Nav Links ── */
+
+.nav-link {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
 /* ── Booth Summary ── */
 
 .booth-summary-card {
