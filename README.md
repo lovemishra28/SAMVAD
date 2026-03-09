@@ -2,6 +2,8 @@
 
 **SAMVAD** (Sanskrit: *conversation/dialogue*) is an intelligent voter engagement and campaign management platform designed to bridge the gap between government schemes and citizens. Built with modern web technologies, SAMVAD empowers political representatives and community organizers to analyze voter demographics, manage government schemes, and deliver targeted notifications at scale.
 
+Deployment Link: https://samvad-nu.vercel.app
+
 ---
 
 ## 📋 Overview
