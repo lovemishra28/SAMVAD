@@ -6,10 +6,12 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Wheat, GraduationCap, UserRound, Wrench, Users,
   Plus, Search, Filter, Calendar, Clock, ExternalLink,
-  ChevronRight, Shield, TrendingUp, Bell
+  ChevronRight, Shield, TrendingUp, Bell, CheckCircle2,
+  Send, AlertCircle
 } from "lucide-react"
 import BackButton from "../../components/BackButton"
 import { SCHEMES_DATABASE, getSchemesByCategory, getAllCategories, getDaysUntilDeadline } from "../../lib/schemesData"
+import { getNotificationSummary, getNotificationsForCategory, getNotificationsForScheme } from "../../lib/notificationStore"
 
 const CATEGORY_ICONS = {
   Farmers: Wheat,
@@ -33,6 +35,13 @@ const STATUS_CONFIG = {
   closed: { label: "Closed", color: "#ef4444", bg: "rgba(239,68,68,0.1)" },
 }
 
+const NOTIF_TYPE_LABELS = {
+  early_alert: "Early Alert",
+  deadline_reminder: "Deadline Reminder",
+  launch: "Launch Notification",
+  reminder: "Deadline Reminder",
+}
+
 export default function SchemesManagement() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
@@ -40,6 +49,8 @@ export default function SchemesManagement() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [showAddModal, setShowAddModal] = useState(false)
   const [schemes, setSchemes] = useState(SCHEMES_DATABASE)
+  const [notifSummary, setNotifSummary] = useState({})
+  const [schemeNotifications, setSchemeNotifications] = useState({})
 
   // New scheme form state
   const [newScheme, setNewScheme] = useState({
@@ -49,6 +60,61 @@ export default function SchemesManagement() {
   })
 
   const categories = getAllCategories()
+
+  // Load notification data on mount
+  useEffect(() => {
+    const summary = getNotificationSummary()
+    setNotifSummary(summary)
+
+    // Build per-scheme notification lookup
+    const schemeNotifs = {}
+    schemes.forEach(s => {
+      const notifs = getNotificationsForScheme(s.name)
+      const categoryNotifs = getNotificationsForCategory(s.category)
+      // Merge: scheme-specific + category-level notifications
+      const allNotifs = [...notifs]
+      categoryNotifs.forEach(cn => {
+        if (!allNotifs.some(n => n.id === cn.id)) {
+          allNotifs.push(cn)
+        }
+      })
+      if (allNotifs.length > 0) {
+        schemeNotifs[s.id] = allNotifs
+      }
+
+      // Also check localStorage for scheme-level campaign records
+      try {
+        const raw = localStorage.getItem(`campaigns-${s.id}`)
+        if (raw) {
+          const campaigns = JSON.parse(raw)
+          const completedCampaigns = campaigns.filter(c => c.status === "completed")
+          if (completedCampaigns.length > 0 && !schemeNotifs[s.id]) {
+            schemeNotifs[s.id] = completedCampaigns.map(c => ({
+              id: c.id,
+              type: c.type || "launch",
+              sentAt: c.completedAt,
+              audienceCount: c.targetCount,
+              logs: c.logs,
+            }))
+          } else if (completedCampaigns.length > 0 && schemeNotifs[s.id]) {
+            // Merge campaign data in
+            completedCampaigns.forEach(c => {
+              if (!schemeNotifs[s.id].some(n => n.id === c.id)) {
+                schemeNotifs[s.id].push({
+                  id: c.id,
+                  type: c.type || "launch",
+                  sentAt: c.completedAt,
+                  audienceCount: c.targetCount,
+                  logs: c.logs,
+                })
+              }
+            })
+          }
+        }
+      } catch {}
+    })
+    setSchemeNotifications(schemeNotifs)
+  }, [schemes])
 
   const filteredSchemes = useMemo(() => {
     let result = [...schemes]
@@ -74,8 +140,9 @@ export default function SchemesManagement() {
       name: cat,
       count: schemes.filter(s => s.category === cat).length,
       active: schemes.filter(s => s.category === cat && s.status === "active").length,
+      notified: !!notifSummary[cat],
     }))
-  }, [schemes, categories])
+  }, [schemes, categories, notifSummary])
 
   const handleAddScheme = () => {
     if (!newScheme.name || !newScheme.description) return
@@ -88,6 +155,23 @@ export default function SchemesManagement() {
       launchDate: "", registrationStart: "", registrationDeadline: "",
       beneficiaryGroup: "", portalUrl: "",
     })
+  }
+
+  // Helper to get latest notification info for a scheme
+  const getSchemeNotifInfo = (schemeId) => {
+    const notifs = schemeNotifications[schemeId]
+    if (!notifs || notifs.length === 0) return null
+    const latest = notifs[notifs.length - 1]
+    return {
+      count: notifs.length,
+      latestType: latest.type,
+      latestSentAt: latest.sentAt,
+      audienceCount: latest.audienceCount,
+      totalDelivered: notifs.reduce(
+        (sum, n) => sum + (n.logs?.filter(l => l.status === "delivered").length || n.audienceCount || 0),
+        0
+      ),
+    }
   }
 
   return (
@@ -135,7 +219,7 @@ export default function SchemesManagement() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setActiveFilter(isActive ? "all" : cat.name)}
-                className="p-4 rounded-lg text-left transition-all"
+                className="p-4 rounded-lg text-left transition-all relative"
                 style={{
                   background: isActive ? "var(--accent-dim)" : "var(--surface)",
                   border: `1px solid ${isActive ? "rgba(200,255,0,0.3)" : "var(--border)"}`,
@@ -154,9 +238,16 @@ export default function SchemesManagement() {
                     schemes
                   </span>
                 </div>
-                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", color: "#22c55e" }}>
-                  {cat.active} active
-                </span>
+                <div className="flex items-center justify-between mt-1">
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", color: "#22c55e" }}>
+                    {cat.active} active
+                  </span>
+                  {cat.notified && (
+                    <span className="flex items-center gap-0.5" style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", color: "#22c55e" }}>
+                      <CheckCircle2 size={9} /> sent
+                    </span>
+                  )}
+                </div>
               </motion.button>
             )
           })}
@@ -211,6 +302,7 @@ export default function SchemesManagement() {
               const Icon = CATEGORY_ICONS[scheme.category] || Users
               const statusCfg = STATUS_CONFIG[scheme.status] || STATUS_CONFIG.active
               const daysLeft = getDaysUntilDeadline(scheme)
+              const notifInfo = getSchemeNotifInfo(scheme.id)
 
               return (
                 <motion.div
@@ -224,7 +316,7 @@ export default function SchemesManagement() {
                   className="p-5 rounded-xl cursor-pointer transition-all group"
                   style={{
                     background: "var(--surface)",
-                    border: "1px solid var(--border)",
+                    border: `1px solid ${notifInfo ? "rgba(34,197,94,0.15)" : "var(--border)"}`,
                     borderRadius: "var(--radius-lg)",
                   }}
                 >
@@ -243,7 +335,7 @@ export default function SchemesManagement() {
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h3 className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
                           {scheme.name}
                         </h3>
@@ -259,10 +351,45 @@ export default function SchemesManagement() {
                         >
                           {statusCfg.label}
                         </span>
+
+                        {/* ── Notification Status Badge ── */}
+                        {notifInfo ? (
+                          <span
+                            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs shrink-0"
+                            style={{
+                              background: "rgba(34,197,94,0.1)",
+                              color: "#22c55e",
+                              fontFamily: "'DM Mono', monospace",
+                              fontSize: "10px",
+                              letterSpacing: "0.04em",
+                              border: "1px solid rgba(34,197,94,0.2)",
+                            }}
+                          >
+                            <CheckCircle2 size={10} />
+                            Notified
+                          </span>
+                        ) : (
+                          <span
+                            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs shrink-0"
+                            style={{
+                              background: "rgba(245,158,11,0.08)",
+                              color: "#f59e0b",
+                              fontFamily: "'DM Mono', monospace",
+                              fontSize: "10px",
+                              letterSpacing: "0.04em",
+                              border: "1px solid rgba(245,158,11,0.15)",
+                            }}
+                          >
+                            <AlertCircle size={10} />
+                            Awaiting Notification
+                          </span>
+                        )}
                       </div>
+
                       <p className="text-xs mb-2 line-clamp-1" style={{ color: "var(--text-secondary)" }}>
                         {scheme.description}
                       </p>
+
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
                           <Shield size={11} />
@@ -279,6 +406,36 @@ export default function SchemesManagement() {
                           </span>
                         )}
                       </div>
+
+                      {/* ── Notification Metadata Row ── */}
+                      {notifInfo && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          className="mt-2 flex flex-wrap items-center gap-3 pt-2"
+                          style={{ borderTop: "1px solid var(--border)" }}
+                        >
+                          <span className="flex items-center gap-1 text-xs" style={{ color: "#22c55e", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
+                            <Send size={10} />
+                            {NOTIF_TYPE_LABELS[notifInfo.latestType] || notifInfo.latestType}
+                          </span>
+                          <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
+                            <Clock size={10} />
+                            {new Date(notifInfo.latestSentAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}{" "}
+                            {new Date(notifInfo.latestSentAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
+                            <Users size={10} />
+                            {notifInfo.audienceCount} recipients
+                          </span>
+                          {notifInfo.count > 1 && (
+                            <span className="flex items-center gap-1 text-xs" style={{ color: "var(--accent)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
+                              <Bell size={10} />
+                              {notifInfo.count} notifications sent
+                            </span>
+                          )}
+                        </motion.div>
+                      )}
                     </div>
 
                     {/* Arrow */}

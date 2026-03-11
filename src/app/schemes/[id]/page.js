@@ -20,6 +20,7 @@ import { getSchemeById, getDaysUntilDeadline } from "../../../lib/schemesData"
 import { segmentVoters } from "../../../lib/segmentVoters"
 import { createLaunchCampaign, createReminderCampaign, simulateDelivery, computeCampaignAnalytics } from "../../../lib/campaignEngine"
 import { generateApplicationData, computeApplicationAnalytics } from "../../../lib/applicationTracker"
+import { getNotificationsForCategory, getNotificationsForScheme } from "../../../lib/notificationStore"
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -58,6 +59,7 @@ export default function SchemeDetail({ params }) {
   const [sendingType, setSendingType] = useState(null)
   const [applications, setApplications] = useState([])
   const [appAnalytics, setAppAnalytics] = useState(null)
+  const [notificationHistory, setNotificationHistory] = useState([])
 
   // Load voter data from localStorage and segment
   useEffect(() => {
@@ -96,6 +98,17 @@ export default function SchemeDetail({ params }) {
         localStorage.setItem(`applications-${id}`, JSON.stringify(apps))
       }
     }
+
+    // Load notification engine history
+    const schemeNotifs = getNotificationsForScheme(scheme.name)
+    const categoryNotifs = getNotificationsForCategory(scheme.category)
+    const allNotifs = [...schemeNotifs]
+    categoryNotifs.forEach(cn => {
+      if (!allNotifs.some(n => n.id === cn.id)) {
+        allNotifs.push(cn)
+      }
+    })
+    setNotificationHistory(allNotifs)
   }, [scheme, id])
 
   // Persist campaigns
@@ -120,7 +133,7 @@ export default function SchemeDetail({ params }) {
   const hasLaunchCampaign = campaigns.some(c => c.type === "launch")
   const hasReminderCampaign = campaigns.some(c => c.type === "reminder")
 
-  // ── Send Campaign ──
+  // ── Send Campaign (Bulk Dispatch) ──
   const handleSendCampaign = async (type) => {
     if (isSending) return
     setIsSending(true)
@@ -133,31 +146,34 @@ export default function SchemeDetail({ params }) {
     campaign.status = "in-progress"
     setCampaigns(prev => [...prev, campaign])
 
-    const logs = []
-    for (let i = 0; i < targetVoters.length; i++) {
-      await new Promise(r => setTimeout(r, 300 + Math.random() * 400))
+    // Bulk generate all delivery logs instantly
+    const logs = targetVoters.map(voter => {
       const channel = Math.random() > 0.4 ? "sms" : "voice"
-      const log = simulateDelivery(targetVoters[i], scheme, channel, type)
-      logs.push(log)
+      return simulateDelivery(voter, scheme, channel, type)
+    })
 
-      // Update campaign in real time
+    // Brief cosmetic progress animation
+    const animSteps = 10
+    for (let step = 1; step <= animSteps; step++) {
+      await new Promise(r => setTimeout(r, 150))
       setCampaigns(prev => {
         const updated = [...prev]
         const idx = updated.findIndex(c => c.id === campaign.id)
         if (idx > -1) {
+          const progress = Math.round((step / animSteps) * logs.length)
           updated[idx] = {
             ...updated[idx],
-            logs: [...logs],
-            deliveredCount: logs.filter(l => l.status === "delivered").length,
-            failedCount: logs.filter(l => l.status === "failed").length,
-            pendingCount: targetVoters.length - logs.length,
+            logs: logs.slice(0, progress),
+            deliveredCount: logs.slice(0, progress).filter(l => l.status === "delivered").length,
+            failedCount: logs.slice(0, progress).filter(l => l.status === "failed").length,
+            pendingCount: targetVoters.length - progress,
           }
         }
         return updated
       })
     }
 
-    // Finalize
+    // Finalize with all logs
     setCampaigns(prev => {
       const updated = [...prev]
       const idx = updated.findIndex(c => c.id === campaign.id)
@@ -166,6 +182,10 @@ export default function SchemeDetail({ params }) {
           ...updated[idx],
           status: "completed",
           completedAt: new Date().toISOString(),
+          logs,
+          deliveredCount: logs.filter(l => l.status === "delivered").length,
+          failedCount: logs.filter(l => l.status === "failed").length,
+          pendingCount: 0,
         }
       }
       return updated
@@ -282,7 +302,7 @@ export default function SchemeDetail({ params }) {
         {/* ── Tab Content ── */}
         <AnimatePresence mode="wait">
           {activeTab === "overview" && (
-            <OverviewTab key="overview" scheme={scheme} targetVoters={targetVoters} campaigns={campaigns} appAnalytics={appAnalytics} />
+            <OverviewTab key="overview" scheme={scheme} targetVoters={targetVoters} campaigns={campaigns} appAnalytics={appAnalytics} notificationHistory={notificationHistory} />
           )}
           {activeTab === "campaign" && (
             <CampaignTab
@@ -313,7 +333,16 @@ export default function SchemeDetail({ params }) {
 // ═══════════════════════════════════════
 // ── OVERVIEW TAB ──
 // ═══════════════════════════════════════
-function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics }) {
+function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificationHistory }) {
+  const [voterVisibleCount, setVoterVisibleCount] = useState(10)
+  const VOTER_INCREMENT = 10
+  const NOTIF_TYPE_LABELS = {
+    early_alert: "Early Alert",
+    deadline_reminder: "Deadline Reminder",
+    launch: "Launch Notification",
+    reminder: "Deadline Reminder",
+  }
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -355,19 +384,137 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics }) {
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>No voter data loaded. Complete the booth flow first.</p>
             </div>
           ) : (
-            <div className="space-y-1.5 max-h-80 overflow-y-auto">
-              {targetVoters.map((v, i) => (
-                <div key={i} className="flex items-center justify-between p-2.5 rounded-lg" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
-                  <div>
-                    <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{v.name}</p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>{v.occupation}</p>
+            <>
+              <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                {targetVoters.slice(0, voterVisibleCount).map((v, i) => (
+                  <div key={i} className="flex items-center justify-between p-2.5 rounded-lg" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                    <div>
+                      <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{v.name}</p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>{v.occupation}</p>
+                    </div>
+                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", color: "var(--text-muted)" }}>Age {v.age}</span>
                   </div>
-                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", color: "var(--text-muted)" }}>Age {v.age}</span>
+                ))}
+              </div>
+              {voterVisibleCount < targetVoters.length && (
+                <div className="flex justify-center mt-3">
+                  <button
+                    onClick={() => setVoterVisibleCount(prev => prev + VOTER_INCREMENT)}
+                    className="text-xs px-4 py-1.5 rounded-lg transition-all"
+                    style={{
+                      background: "var(--accent-dim)",
+                      border: "1px solid rgba(200,255,0,0.2)",
+                      color: "var(--accent)",
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: "10px",
+                    }}
+                  >
+                    Show More ({targetVoters.length - voterVisibleCount} remaining)
+                  </button>
                 </div>
-              ))}
-            </div>
+              )}
+              {voterVisibleCount >= targetVoters.length && targetVoters.length > VOTER_INCREMENT && (
+                <div className="flex justify-center mt-3">
+                  <button
+                    onClick={() => setVoterVisibleCount(VOTER_INCREMENT)}
+                    className="text-xs px-3 py-1 rounded-lg"
+                    style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}
+                  >
+                    Collapse List
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
+      </div>
+
+      {/* ── Notification Engine History ── */}
+      <div className="booth-summary-card mt-6">
+        <h2 style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
+          Notification Engine History
+        </h2>
+        {notificationHistory.length === 0 ? (
+          <div className="text-center py-8">
+            <Bell size={24} className="mx-auto mb-2 opacity-30" style={{ color: "var(--text-muted)" }} />
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>No notifications sent yet</p>
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Use the Notification Engine to send scheme alerts to targeted citizens</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {notificationHistory.map((notif, i) => {
+              const deliveredCount = notif.logs?.filter(l => l.status === "delivered").length || 0
+              const totalLogs = notif.logs?.length || notif.audienceCount || 0
+
+              return (
+                <motion.div
+                  key={notif.id || i}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="p-4 rounded-lg"
+                  style={{ background: "var(--bg)", border: "1px solid rgba(34,197,94,0.15)", borderRadius: "var(--radius-md)" }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-lg" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)" }}>
+                        <Check size={14} style={{ color: "#22c55e" }} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                          {NOTIF_TYPE_LABELS[notif.type] || notif.type}
+                        </p>
+                        <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
+                          via Notification Engine
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className="px-2.5 py-1 rounded text-xs"
+                      style={{
+                        background: "rgba(34,197,94,0.1)",
+                        color: "#22c55e",
+                        fontFamily: "'DM Mono', monospace",
+                        fontSize: "10px",
+                        letterSpacing: "0.06em",
+                        border: "1px solid rgba(34,197,94,0.2)",
+                      }}
+                    >
+                      ✓ Delivered
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Type</p>
+                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{NOTIF_TYPE_LABELS[notif.type] || notif.type}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Sent At</p>
+                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        {new Date(notif.sentAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
+                        {new Date(notif.sentAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Audience</p>
+                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{notif.audienceCount || totalLogs} recipients</p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
+                        {notif.category || scheme.category}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Delivered</p>
+                      <p className="text-sm font-medium" style={{ color: "#22c55e" }}>{deliveredCount} / {totalLogs}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Quick Summary Insight */}
@@ -378,6 +525,10 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics }) {
             {campaigns.length > 0
               ? ` ${campaigns.filter(c => c.status === "completed").length} campaign(s) have been executed with a ${computeCampaignAnalytics(campaigns).successRate}% delivery success rate.`
               : " No notification campaigns have been launched yet. Go to Campaign Control to initiate the first announcement."
+            }
+            {notificationHistory.length > 0
+              ? ` ${notificationHistory.length} notification(s) sent via the Notification Engine.`
+              : ""
             }
             {appAnalytics
               ? ` Application adoption rate stands at ${appAnalytics.adoptionRate}% with ${appAnalytics.applied} voters having successfully applied.`
@@ -474,10 +625,10 @@ function CampaignTab({ scheme, targetVoters, campaigns, isSending, sendingType, 
           </div>
         </div>
 
-        {/* Live Delivery Log */}
+        {/* Dispatch Summary */}
         <div className="booth-summary-card" style={{ minHeight: 300 }}>
           <h2 style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
-            Live Delivery Feed
+            Dispatch Summary
           </h2>
 
           {/* Progress bar when sending */}
@@ -485,7 +636,7 @@ function CampaignTab({ scheme, targetVoters, campaigns, isSending, sendingType, 
             <div className="mb-4">
               <div className="flex justify-between items-center mb-1.5">
                 <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  {sendingType === "launch" ? "Sending Launch" : "Sending Reminder"}
+                  {sendingType === "launch" ? "Dispatching Launch" : "Dispatching Reminder"}
                 </p>
                 <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", color: "var(--accent)" }}>
                   {Math.round(sendProgress)}%
@@ -502,50 +653,78 @@ function CampaignTab({ scheme, targetVoters, campaigns, isSending, sendingType, 
             </div>
           )}
 
-          {/* Logs */}
-          {campaigns.length === 0 ? (
+          {/* No campaigns yet */}
+          {campaigns.length === 0 && !isSending ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Radio size={28} className="mb-3 opacity-30" style={{ color: "var(--text-muted)" }} />
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>No campaigns sent yet</p>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Launch a campaign to see live delivery logs</p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Launch a campaign to dispatch notifications</p>
             </div>
-          ) : (
-            <div className="space-y-1.5 max-h-96 overflow-y-auto">
-              <AnimatePresence>
-                {campaigns.slice().reverse().flatMap(c => c.logs.slice().reverse()).slice(0, 50).map((log, i) => (
-                  <motion.div
-                    key={`${log.voterId}-${log.timestamp}-${i}`}
-                    initial={{ opacity: 0, x: 15 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="flex items-center gap-3 p-2.5 rounded-lg"
-                    style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+          ) : campaigns.some(c => c.status === "completed") ? (
+            <>
+              {/* Success confirmation */}
+              <div className="text-center py-6">
+                <div
+                  className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-4"
+                  style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)" }}
+                >
+                  <Check size={24} style={{ color: "#22c55e" }} />
+                </div>
+                <p className="text-base font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
+                  All notifications sent successfully
+                </p>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  Dispatched to <strong style={{ color: "var(--accent)" }}>{targetVoters.length}</strong> {scheme.category.toLowerCase()} in bulk
+                </p>
+              </div>
+
+              {/* Per-campaign summary cards (no per-user logs) */}
+              <div className="space-y-3 mt-2">
+                {campaigns.filter(c => c.status === "completed").map((c) => (
+                  <div
+                    key={c.id}
+                    className="p-4 rounded-lg"
+                    style={{ background: "var(--bg)", border: "1px solid rgba(34,197,94,0.15)", borderRadius: "var(--radius-md)" }}
                   >
-                    {log.status === "delivered"
-                      ? <Check size={14} style={{ color: "#22c55e" }} />
-                      : <X size={14} style={{ color: "#ef4444" }} />
-                    }
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>
-                        {log.voterName}
-                      </p>
-                      <p className="text-xs truncate" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
-                        {log.channel.toUpperCase()} · {log.type}
-                      </p>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        {c.type === "launch" ? <Send size={14} style={{ color: "#3b82f6" }} /> : <Bell size={14} style={{ color: "#f59e0b" }} />}
+                        <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{c.label || (c.type === "launch" ? "Launch Notification" : "Deadline Reminder")}</span>
+                      </div>
+                      <span
+                        className="px-2.5 py-1 rounded text-xs"
+                        style={{
+                          background: "rgba(34,197,94,0.1)",
+                          color: "#22c55e",
+                          fontFamily: "'DM Mono', monospace",
+                          fontSize: "10px",
+                          border: "1px solid rgba(34,197,94,0.2)",
+                        }}
+                      >
+                        ✓ Completed
+                      </span>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs" style={{ color: log.status === "delivered" ? "#22c55e" : "#ef4444", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
-                        {log.status}
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px" }}>
-                        {new Date(log.timestamp).toLocaleTimeString()}
-                      </p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Delivered</p>
+                        <p className="text-sm font-medium" style={{ color: "#22c55e" }}>{c.deliveredCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Failed</p>
+                        <p className="text-sm font-medium" style={{ color: "#ef4444" }}>{c.failedCount || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Sent At</p>
+                        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                          {c.completedAt ? new Date(c.completedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                        </p>
+                      </div>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
-              </AnimatePresence>
-            </div>
-          )}
+              </div>
+            </>
+          ) : null}
         </div>
       </div>
     </motion.div>
