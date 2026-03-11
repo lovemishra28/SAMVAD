@@ -19,6 +19,8 @@ export default function Dashboard() {
   const [boothInsight, setBoothInsight] = useState(null);
   const [boothInsightText, setBoothInsightText] = useState("");
   const [allVoters, setAllVoters] = useState([]);
+  const [visibleCount, setVisibleCount] = useState(10);
+  const LOAD_INCREMENT = 10;
 
   useEffect(() => {
     const storedVoters = localStorage.getItem("voters");
@@ -119,33 +121,37 @@ export default function Dashboard() {
                 <CategoryCard
                   title="Farmers"
                   voters={segments.farmers}
-                  onClick={() =>
+                  onClick={() => {
                     setSelectedCategory({ name: "Farmers", voters: segments.farmers })
-                  }
+                    setVisibleCount(LOAD_INCREMENT)
+                  }}
                 />
                 <CategoryCard
                   title="Students"
                   voters={segments.students}
-                  onClick={() =>
+                  onClick={() => {
                     setSelectedCategory({ name: "Students", voters: segments.students })
-                  }
+                    setVisibleCount(LOAD_INCREMENT)
+                  }}
                 />
                 <CategoryCard
                   title="Senior Citizens"
                   voters={segments.seniorCitizens}
-                  onClick={() =>
+                  onClick={() => {
                     setSelectedCategory({
                       name: "Senior Citizens",
                       voters: segments.seniorCitizens,
                     })
-                  }
+                    setVisibleCount(LOAD_INCREMENT)
+                  }}
                 />
                 <CategoryCard
                   title="Workers"
                   voters={segments.workers}
-                  onClick={() =>
+                  onClick={() => {
                     setSelectedCategory({ name: "Workers", voters: segments.workers })
-                  }
+                    setVisibleCount(LOAD_INCREMENT)
+                  }}
                 />
                 <CategoryCard
                   title="Others"
@@ -163,7 +169,7 @@ export default function Dashboard() {
                     ...segments.workers,
                     ...segments.others,
                   ]}
-                  onClick={() =>
+                  onClick={() => {
                     setSelectedCategory({
                       name: "All Voters",
                       voters: [
@@ -174,7 +180,8 @@ export default function Dashboard() {
                         ...segments.others,
                       ],
                     })
-                  }
+                    setVisibleCount(LOAD_INCREMENT)
+                  }}
                 />
               </div>
             </div>
@@ -199,12 +206,46 @@ export default function Dashboard() {
                 {selectedCategory.name} ({selectedCategory.voters.length})
               </h2>
               <ul className="space-y-2 mb-6 max-h-96 overflow-y-auto">
-                {selectedCategory.voters.map((voter, index) => (
+                {selectedCategory.voters.slice(0, visibleCount).map((voter, index) => (
                   <li key={index} className="inner-card text-slate-200 text-sm">
                     {voter.name} — Age {voter.age} — {voter.occupation}
                   </li>
                 ))}
               </ul>
+              {visibleCount < selectedCategory.voters.length && (
+                <div className="flex items-center justify-center mb-4">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setVisibleCount(prev => prev + LOAD_INCREMENT)}
+                    className="px-5 py-2 rounded-lg text-xs font-medium transition-all"
+                    style={{
+                      background: "var(--accent-dim)",
+                      border: "1px solid rgba(200,255,0,0.2)",
+                      color: "var(--accent)",
+                      fontFamily: "'DM Mono', monospace",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    Show More ({selectedCategory.voters.length - visibleCount} remaining)
+                  </motion.button>
+                </div>
+              )}
+              {visibleCount >= selectedCategory.voters.length && selectedCategory.voters.length > LOAD_INCREMENT && (
+                <div className="flex items-center justify-center mb-4">
+                  <button
+                    onClick={() => setVisibleCount(LOAD_INCREMENT)}
+                    className="px-4 py-1.5 rounded-lg text-xs transition-all"
+                    style={{
+                      color: "var(--text-muted)",
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: "10px",
+                    }}
+                  >
+                    Collapse List
+                  </button>
+                </div>
+              )}
               <h3 className="text-base md:text-lg font-semibold mb-2 text-white">
                 Recommended Government Schemes
               </h3>
@@ -213,23 +254,23 @@ export default function Dashboard() {
                   <li key={index}>{scheme}</li>
                 ))}
               </ul>
-              <button
+              {/* <button
                 className="mt-6 primary-button text-white"
                 onClick={() => router.push("/notifications")}
               >
                 Send Notifications →
-              </button>
+              </button> */}
             </div>
           </div>
         )}
 
         {/* CTA Section */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+        <div className=" mt-6">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
-            className="flex flex-col items-start justify-between p-5 rounded-xl"
+            className="flex items-center justify-between p-5 rounded-xl"
             style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" }}
           >
             <div>
@@ -244,13 +285,13 @@ export default function Dashboard() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => router.push("/notifications")}
-              className="primary-button mt-3"
+              className="primary-button"
             >
               Notification Engine →
             </motion.button>
           </motion.div>
 
-          <motion.div
+          {/* <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.7 }}
@@ -273,7 +314,7 @@ export default function Dashboard() {
             >
               Scheme Management →
             </motion.button>
-          </motion.div>
+          </motion.div> */}
         </div>
 
         {/* Steps indicator */}
