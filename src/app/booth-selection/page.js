@@ -8,61 +8,8 @@ import { MapPin, Navigation, Check, Loader } from "lucide-react";
 import BackButton from "../../components/BackButton";
 import ProgressBar from "../../components/ProgressBar";
 
-const BOOTHS = [
-  {
-    id: "B101",
-    name: "Booth 101",
-    area: "Ward 5 — Laxmi Nagar",
-    district: "East Delhi",
-    voters: 1240,
-    type: "Urban",
-    lat: 28.6312,
-    lng: 77.2772,
-  },
-  {
-    id: "B102",
-    name: "Booth 102",
-    area: "Ward 12 — Sadar Bazaar",
-    district: "Central Delhi",
-    voters: 980,
-    type: "Semi-Urban",
-    lat: 28.6563,
-    lng: 77.2078,
-  },
-  {
-    id: "B103",
-    name: "Booth 103",
-    area: "Ward 8 — Kisan Colony",
-    district: "North Delhi",
-    voters: 1560,
-    type: "Rural",
-    lat: 28.7183,
-    lng: 77.2024,
-  },
-  {
-    id: "B104",
-    name: "Booth 104",
-    area: "Ward 3 — Shastri Park",
-    district: "East Delhi",
-    voters: 870,
-    type: "Urban",
-    lat: 28.6731,
-    lng: 77.2507,
-  },
-  {
-    id: "B105",
-    name: "Booth 105",
-    area: "Ward 17 — Patel Chowk",
-    district: "New Delhi",
-    voters: 1100,
-    type: "Urban",
-    lat: 28.6228,
-    lng: 77.2148,
-  },
-];
-
-const DEFAULT_CENTER = [28.6448, 77.2167]; // Central Delhi
-const DEFAULT_ZOOM = 12;
+const DEFAULT_CENTER = [23.47, 77.94]; // Madhya Pradesh center
+const DEFAULT_ZOOM = 6;
 
 /* ── Map component loaded client-side only ── */
 const MapInner = dynamic(
@@ -219,6 +166,8 @@ function getDistance(lat1, lng1, lat2, lng2) {
 }
 
 export default function BoothSelection() {
+  const [booths, setBooths] = useState([]);
+  const [boothsLoading, setBoothsLoading] = useState(true);
   const [boothId, setBoothId] = useState("");
   const [manualId, setManualId] = useState("");
   const [error, setError] = useState("");
@@ -228,10 +177,36 @@ export default function BoothSelection() {
   const [nearestBoothMsg, setNearestBoothMsg] = useState("");
   const router = useRouter();
 
-  const selectedBooth = BOOTHS.find((b) => b.id === boothId);
+  const selectedBooth = booths.find((b) => b.id === boothId);
 
-  // Auto-detect user location and find nearest booth
+  // Fetch booth list from backend API on mount
   useEffect(() => {
+    const loadBooths = async () => {
+      try {
+        const res = await fetch("/api/booths/list");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.booths)) {
+          // Normalize: ensure each booth has lat/lng as numbers and voters field
+          const normalized = data.booths.map((b) => ({
+            ...b,
+            lat: Number(b.lat),
+            lng: Number(b.lng),
+            voters: b.voterCount || b.voters || 0,
+          }));
+          setBooths(normalized);
+        }
+      } catch (err) {
+        console.error("Failed to load booths from API:", err);
+      } finally {
+        setBoothsLoading(false);
+      }
+    };
+    loadBooths();
+  }, []);
+
+  // Auto-detect user location and find nearest booth (runs after booths load)
+  useEffect(() => {
+    if (boothsLoading || booths.length === 0) return;
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -241,7 +216,7 @@ export default function BoothSelection() {
           // Find nearest booth
           let minDist = Infinity;
           let nearest = null;
-          BOOTHS.forEach((b) => {
+          booths.forEach((b) => {
             const d = getDistance(loc[0], loc[1], b.lat, b.lng);
             if (d < minDist) { minDist = d; nearest = b; }
           });
@@ -257,7 +232,7 @@ export default function BoothSelection() {
     } else {
       setAutoDetecting(false);
     }
-  }, []);
+  }, [booths, boothsLoading]);
 
   const handleSelectChange = (e) => {
     setBoothId(e.target.value);
@@ -271,7 +246,7 @@ export default function BoothSelection() {
     setManualId(val);
     setError("");
     setConfirmed(false);
-    const match = BOOTHS.find((b) => b.id === val);
+    const match = booths.find((b) => b.id === val);
     if (match) setBoothId(val);
     else setBoothId("");
   };
@@ -289,7 +264,7 @@ export default function BoothSelection() {
       setError("Please select or enter a Booth ID");
       return;
     }
-    const match = BOOTHS.find((b) => b.id === finalId);
+    const match = booths.find((b) => b.id === finalId);
     if (!match) {
       setError("Invalid Booth ID. Please select from available booths.");
       return;
@@ -347,7 +322,7 @@ export default function BoothSelection() {
         }}
       >
         <MapInner
-          booths={BOOTHS}
+          booths={booths}
           selectedBoothId={boothId}
           userLocation={userLocation}
           onBoothClick={handleBoothClick}
@@ -418,7 +393,7 @@ export default function BoothSelection() {
             }}
           >
             <option value="">— Choose from available booths —</option>
-            {BOOTHS.map((b) => (
+            {booths.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.id} — {b.area}
               </option>

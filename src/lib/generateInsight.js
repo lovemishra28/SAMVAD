@@ -10,7 +10,7 @@ export function generateInsight(voters, segments) {
     { name: "Students", count: segments.students.length },
     { name: "Senior Citizens", count: segments.seniorCitizens.length },
     { name: "Workers", count: segments.workers.length },
-    { name: "Others", count: segments.others.length }
+    { name: "Women", count: segments.women.length }
   ]
 
   const dominant = categories.sort((a,b)=>b.count-a.count)[0]

@@ -15,7 +15,8 @@ ChartJS.register(
   Legend
 )
 
-export default function CategoryChart({ segments }) {
+export default function CategoryChart({ segments = {} }) {
+  const getCount = (items) => (Array.isArray(items) ? items.length : 0);
 
   const data = {
     labels: [
@@ -23,16 +24,16 @@ export default function CategoryChart({ segments }) {
       "Students",
       "Senior Citizens",
       "Workers",
-      "Others"
+      "Women"
     ],
     datasets: [
       {
         data: [
-          segments.farmers.length,
-          segments.students.length,
-          segments.seniorCitizens.length,
-          segments.workers.length,
-          segments.others.length
+          getCount(segments.farmers),
+          getCount(segments.students),
+          getCount(segments.seniorCitizens),
+          getCount(segments.workers),
+          getCount(segments.women)
         ],
         backgroundColor: [
           "#6366f1",

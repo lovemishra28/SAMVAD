@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, use } from "react"
+import { use, useState, useEffect, useMemo, useLayoutEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -16,22 +16,25 @@ import {
 } from "chart.js"
 import { Pie, Bar, Doughnut } from "react-chartjs-2"
 import BackButton from "../../../components/BackButton"
-import { getSchemeById, getDaysUntilDeadline } from "../../../lib/schemesData"
+import { getDaysUntilDeadline, mapSchemeCategoryToSegmentKey, filterVotersByScheme } from "../../../lib/schemeUtils"
+import { fetchSchemeById } from "../../../lib/api/schemes"
 import { segmentVoters } from "../../../lib/segmentVoters"
 import { createLaunchCampaign, createReminderCampaign, simulateDelivery, computeCampaignAnalytics } from "../../../lib/campaignEngine"
+import { createCampaign } from "../../../lib/api/campaigns"
 import { generateApplicationData, computeApplicationAnalytics } from "../../../lib/applicationTracker"
+import { fetchApplications, createApplication, fetchApplicationAnalytics } from "../../../lib/api/applications"
 import { getNotificationsForCategory, getNotificationsForScheme } from "../../../lib/notificationStore"
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
 const CATEGORY_ICONS = {
   Farmers: Wheat, Students: GraduationCap,
-  "Senior Citizens": UserRound, Workers: Wrench, Others: Users,
+  "Senior Citizens": UserRound, Workers: Wrench, Women: Users,
 }
 
 const CATEGORY_COLORS = {
   Farmers: "#22c55e", Students: "#3b82f6",
-  "Senior Citizens": "#f59e0b", Workers: "#8b5cf6", Others: "#ec4899",
+  "Senior Citizens": "#f59e0b", Workers: "#8b5cf6", Women: "#ec4899",
 }
 
 const STATUS_CONFIG = {
@@ -51,7 +54,8 @@ export default function SchemeDetail({ params }) {
   const { id } = use(params)
   const router = useRouter()
 
-  const scheme = getSchemeById(id)
+  const [scheme, setScheme] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
   const [targetVoters, setTargetVoters] = useState([])
   const [campaigns, setCampaigns] = useState([])
@@ -59,7 +63,28 @@ export default function SchemeDetail({ params }) {
   const [sendingType, setSendingType] = useState(null)
   const [applications, setApplications] = useState([])
   const [appAnalytics, setAppAnalytics] = useState(null)
+  const [applicationError, setApplicationError] = useState(null)
+  const [applicationLoading, setApplicationLoading] = useState(false)
   const [notificationHistory, setNotificationHistory] = useState([])
+
+  // Load scheme data from backend
+  useEffect(() => {
+    let mounted = true
+    setLoading(true)
+
+    fetchSchemeById(id)
+      .then((s) => {
+        if (mounted) setScheme(s)
+      })
+      .catch((err) => {
+        console.warn("Failed to load scheme:", err)
+      })
+      .finally(() => {
+        if (mounted) setLoading(false)
+      })
+
+    return () => { mounted = false }
+  }, [id])
 
   // Load voter data from localStorage and segment
   useEffect(() => {
@@ -70,33 +95,53 @@ export default function SchemeDetail({ params }) {
     const voters = JSON.parse(storedVoters)
     const segments = segmentVoters(voters)
 
-    // Map scheme category to segment key
-    const categoryMap = {
-      Farmers: "farmers", Students: "students",
-      "Senior Citizens": "seniorCitizens", Workers: "workers", Others: "others",
+    // Map scheme category to segment key and choose target voters
+    const schemeCategoryKey = mapSchemeCategoryToSegmentKey(scheme.category)
+    let target = []
+
+    if (schemeCategoryKey && segments[schemeCategoryKey]) {
+      target = segments[schemeCategoryKey]
     }
 
-    const segKey = categoryMap[scheme.category]
-    const target = segKey ? segments[segKey] : []
+    // Fallback to filter voters using approximate matching if no assigned segment found
+    if (target.length === 0) {
+      const storedVoters = localStorage.getItem("voters")
+      if (storedVoters) {
+        const allVoters = JSON.parse(storedVoters)
+        target = filterVotersByScheme(allVoters, scheme)
+      }
+    }
+
+    if (!target) target = []
     setTargetVoters(target)
 
     // Load persisted campaigns
     const storedCampaigns = localStorage.getItem(`campaigns-${id}`)
     if (storedCampaigns) setCampaigns(JSON.parse(storedCampaigns))
 
-    // Generate application data
+    // Load application data from server or fallback local simulation
     if (target.length > 0) {
-      const storedApps = localStorage.getItem(`applications-${id}`)
-      if (storedApps) {
-        const apps = JSON.parse(storedApps)
-        setApplications(apps)
-        setAppAnalytics(computeApplicationAnalytics(apps))
-      } else {
+      const loadApps = async () => {
+        try {
+          const serverApps = await fetchApplications(id)
+          if (serverApps && serverApps.length > 0) {
+            setApplications(serverApps)
+            const analytics = await fetchApplicationAnalytics(id)
+            setAppAnalytics(analytics)
+            return
+          }
+        } catch (err) {
+          setApplicationError(err.message)
+        }
+
+        // fallback local generate
         const apps = generateApplicationData(scheme, target)
         setApplications(apps)
         setAppAnalytics(computeApplicationAnalytics(apps))
         localStorage.setItem(`applications-${id}`, JSON.stringify(apps))
       }
+
+      loadApps()
     }
 
     // Load notification engine history
@@ -118,6 +163,14 @@ export default function SchemeDetail({ params }) {
     }
   }, [campaigns, id])
 
+  if (loading) {
+    return (
+      <div className="min-h-[calc(100vh-70px)] flex items-center justify-center">
+        <p style={{ color: "var(--text-secondary)" }}>Loading scheme...</p>
+      </div>
+    )
+  }
+
   if (!scheme) {
     return (
       <div className="min-h-[calc(100vh-70px)] flex items-center justify-center">
@@ -132,6 +185,38 @@ export default function SchemeDetail({ params }) {
   const campaignAnalytics = computeCampaignAnalytics(campaigns)
   const hasLaunchCampaign = campaigns.some(c => c.type === "launch")
   const hasReminderCampaign = campaigns.some(c => c.type === "reminder")
+
+  const handleMarkApplication = async () => {
+    if (!scheme || targetVoters.length === 0) return
+
+    const notApplied = applications.filter(a => a.status !== "applied")
+    const candidate = notApplied.length > 0 ? notApplied[Math.floor(Math.random() * notApplied.length)] : null
+    const randomVoter = candidate || targetVoters[Math.floor(Math.random() * targetVoters.length)]
+
+    const payload = {
+      schemeId: scheme.id,
+      schemeName: scheme.name,
+      voterId: randomVoter.voterId || randomVoter.id || randomVoter.name,
+      voterName: randomVoter.voterName || randomVoter.name,
+      category: scheme.category,
+      status: "applied",
+    }
+
+    setApplicationLoading(true)
+    setApplicationError(null)
+
+    try {
+      await createApplication(payload)
+      const updatedApps = await fetchApplications(id)
+      setApplications(updatedApps)
+      const updatedAnalytics = await fetchApplicationAnalytics(id)
+      setAppAnalytics(updatedAnalytics)
+    } catch (err) {
+      setApplicationError(err.message)
+    } finally {
+      setApplicationLoading(false)
+    }
+  }
 
   // ── Send Campaign (Bulk Dispatch) ──
   const handleSendCampaign = async (type) => {
@@ -190,6 +275,18 @@ export default function SchemeDetail({ params }) {
       }
       return updated
     })
+
+    try {
+      const boothId = localStorage.getItem("boothId") || ""
+      await createCampaign({
+        schemeId: scheme.id || scheme.schemeId,
+        type,
+        category: scheme.category,
+        boothId,
+      })
+    } catch (err) {
+      console.warn("Failed to persist campaign via API", err)
+    }
 
     setIsSending(false)
     setSendingType(null)
@@ -252,78 +349,59 @@ export default function SchemeDetail({ params }) {
             </div>
           </div>
 
-          {/* Key Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="insight-stat-box">
-              <p>Target Voters</p>
-              <p>{targetVoters.length}</p>
+          {/* Key Metrics - hidden for minimal overview (commented as requested) */}
+          {false && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="insight-stat-box">
+                <p>Target Voters</p>
+                <p>{targetVoters.length}</p>
+              </div>
+              <div className="insight-stat-box">
+                <p>Campaigns Sent</p>
+                <p>{campaigns.filter(c => c.status === "completed").length}</p>
+              </div>
+              <div className="insight-stat-box">
+                <p>Delivery Rate</p>
+                <p>{campaignAnalytics.successRate}%</p>
+              </div>
+              <div className="insight-stat-box">
+                <p>Adoption Rate</p>
+                <p>{appAnalytics ? `${appAnalytics.adoptionRate}%` : "—"}</p>
+              </div>
             </div>
-            <div className="insight-stat-box">
-              <p>Campaigns Sent</p>
-              <p>{campaigns.filter(c => c.status === "completed").length}</p>
-            </div>
-            <div className="insight-stat-box">
-              <p>Delivery Rate</p>
-              <p>{campaignAnalytics.successRate}%</p>
-            </div>
-            <div className="insight-stat-box">
-              <p>Adoption Rate</p>
-              <p>{appAnalytics ? `${appAnalytics.adoptionRate}%` : "—"}</p>
-            </div>
+          )}
+        </div>
+
+        {/* Tab navigation and extra tabs are currently hidden (overview only) */}
+        {false && (
+          <div className="flex gap-1 mb-6 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+            {TAB_CONFIG.map(tab => {
+              const TabIcon = tab.icon
+              const isActive = activeTab === tab.key
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-all"
+                  style={{
+                    background: isActive ? "var(--accent-dim)" : "transparent",
+                    border: `1px solid ${isActive ? "rgba(200,255,0,0.25)" : "var(--border)"}`,
+                    color: isActive ? "var(--accent)" : "var(--text-secondary)",
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: "11px",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  <TabIcon size={14} />
+                  {tab.label}
+                </button>
+              )
+            })}
           </div>
-        </div>
+        )}
 
-        {/* ── Tab Navigation ── */}
-        <div className="flex gap-1 mb-6 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-          {TAB_CONFIG.map(tab => {
-            const TabIcon = tab.icon
-            const isActive = activeTab === tab.key
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-all"
-                style={{
-                  background: isActive ? "var(--accent-dim)" : "transparent",
-                  border: `1px solid ${isActive ? "rgba(200,255,0,0.25)" : "var(--border)"}`,
-                  color: isActive ? "var(--accent)" : "var(--text-secondary)",
-                  fontFamily: "'DM Mono', monospace",
-                  fontSize: "11px",
-                  letterSpacing: "0.04em",
-                }}
-              >
-                <TabIcon size={14} />
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* ── Tab Content ── */}
-        <AnimatePresence mode="wait">
-          {activeTab === "overview" && (
-            <OverviewTab key="overview" scheme={scheme} targetVoters={targetVoters} campaigns={campaigns} appAnalytics={appAnalytics} notificationHistory={notificationHistory} />
-          )}
-          {activeTab === "campaign" && (
-            <CampaignTab
-              key="campaign"
-              scheme={scheme}
-              targetVoters={targetVoters}
-              campaigns={campaigns}
-              isSending={isSending}
-              sendingType={sendingType}
-              hasLaunchCampaign={hasLaunchCampaign}
-              hasReminderCampaign={hasReminderCampaign}
-              onSend={handleSendCampaign}
-            />
-          )}
-          {activeTab === "tracking" && (
-            <TrackingTab key="tracking" campaigns={campaigns} analytics={campaignAnalytics} />
-          )}
-          {activeTab === "applications" && (
-            <ApplicationsTab key="applications" scheme={scheme} applications={applications} analytics={appAnalytics} />
-          )}
-        </AnimatePresence>
+        {/* Render only overview content */}
+        <OverviewTab scheme={scheme} targetVoters={targetVoters} campaigns={campaigns} appAnalytics={appAnalytics} notificationHistory={notificationHistory} />
       </motion.div>
     </div>
   )
@@ -335,6 +413,16 @@ export default function SchemeDetail({ params }) {
 // ═══════════════════════════════════════
 function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificationHistory }) {
   const [voterVisibleCount, setVoterVisibleCount] = useState(10)
+  const [targetMaxHeight, setTargetMaxHeight] = useState(null)
+  const schemeDetailRef = useRef(null)
+
+  useLayoutEffect(() => {
+    if (schemeDetailRef.current) {
+      const height = schemeDetailRef.current.getBoundingClientRect().height
+      setTargetMaxHeight(height)
+    }
+  }, [scheme, targetVoters, voterVisibleCount])
+
   const VOTER_INCREMENT = 10
   const NOTIF_TYPE_LABELS = {
     early_alert: "Early Alert",
@@ -345,21 +433,21 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificati
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         {/* Scheme Details */}
-        <div className="booth-summary-card">
+        <div ref={schemeDetailRef} className="booth-summary-card h-full">
           <h2 style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
             Scheme Details
           </h2>
           <div className="space-y-4">
             {[
               { label: "Scheme ID", value: scheme.id },
-              { label: "Category", value: scheme.category },
+              { label: "Beneficiary Group", value: scheme.category },
               { label: "Launch Date", value: new Date(scheme.launchDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) },
               { label: "Registration Start", value: new Date(scheme.registrationStart).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) },
               { label: "Registration Deadline", value: new Date(scheme.registrationDeadline).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) },
-              { label: "Beneficiary Group", value: scheme.beneficiaryGroup },
-              { label: "Portal", value: scheme.portalUrl },
+              // { label: "Beneficiary Group", value: scheme.beneficiaryGroup },
+              { label: "Portal", value: scheme.portalUrl || "URL not available" },
             ].map(item => (
               <div key={item.label} className="flex justify-between items-start gap-3">
                 <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)", flexShrink: 0 }}>
@@ -374,7 +462,7 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificati
         </div>
 
         {/* Targeted Voters */}
-        <div className="booth-summary-card">
+        <div className="booth-summary-card h-full">
           <h2 style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
             Targeted Voter List ({targetVoters.length})
           </h2>
@@ -385,7 +473,13 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificati
             </div>
           ) : (
             <>
-              <div className="space-y-1.5 max-h-80 overflow-y-auto">
+              <div
+                className="space-y-1.5 overflow-y-auto"
+                style={{
+                  maxHeight: targetMaxHeight ? `${targetMaxHeight - 650}px` : "120px",
+                  minHeight: "140px",
+                }}
+              >
                 {targetVoters.slice(0, voterVisibleCount).map((v, i) => (
                   <div key={i} className="flex items-center justify-between p-2.5 rounded-lg" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
                     <div>
@@ -429,96 +523,28 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificati
         </div>
       </div>
 
-      {/* ── Notification Engine History ── */}
-      <div className="booth-summary-card mt-6">
-        <h2 style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
-          Notification Engine History
-        </h2>
-        {notificationHistory.length === 0 ? (
-          <div className="text-center py-8">
-            <Bell size={24} className="mx-auto mb-2 opacity-30" style={{ color: "var(--text-muted)" }} />
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>No notifications sent yet</p>
-            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Use the Notification Engine to send scheme alerts to targeted citizens</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {notificationHistory.map((notif, i) => {
-              const deliveredCount = notif.logs?.filter(l => l.status === "delivered").length || 0
-              const totalLogs = notif.logs?.length || notif.audienceCount || 0
+      {/* Notification Engine History is commented for a minimal overview */}
+      {false && (
+        <div className="booth-summary-card mt-6">
+          <h2 style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
+            Notification Engine History
+          </h2>
+          {notificationHistory.length === 0 ? (
+            <div className="text-center py-8">
+              <Bell size={24} className="mx-auto mb-2 opacity-30" style={{ color: "var(--text-muted)" }} />
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>No notifications sent yet</p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Use the Notification Engine to send scheme alerts to targeted citizens</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              ...
+            </div>
+          )}
+        </div>
+      )}
 
-              return (
-                <motion.div
-                  key={notif.id || i}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="p-4 rounded-lg"
-                  style={{ background: "var(--bg)", border: "1px solid rgba(34,197,94,0.15)", borderRadius: "var(--radius-md)" }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center justify-center w-8 h-8 rounded-lg" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)" }}>
-                        <Check size={14} style={{ color: "#22c55e" }} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                          {NOTIF_TYPE_LABELS[notif.type] || notif.type}
-                        </p>
-                        <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
-                          via Notification Engine
-                        </p>
-                      </div>
-                    </div>
-                    <span
-                      className="px-2.5 py-1 rounded text-xs"
-                      style={{
-                        background: "rgba(34,197,94,0.1)",
-                        color: "#22c55e",
-                        fontFamily: "'DM Mono', monospace",
-                        fontSize: "10px",
-                        letterSpacing: "0.06em",
-                        border: "1px solid rgba(34,197,94,0.2)",
-                      }}
-                    >
-                      ✓ Delivered
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div>
-                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Type</p>
-                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{NOTIF_TYPE_LABELS[notif.type] || notif.type}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Sent At</p>
-                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                        {new Date(notif.sentAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
-                        {new Date(notif.sentAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Audience</p>
-                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{notif.audienceCount || totalLogs} recipients</p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "10px" }}>
-                        {notif.category || scheme.category}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs" style={{ color: "var(--text-muted)", fontFamily: "'DM Mono', monospace", fontSize: "9px", textTransform: "uppercase" }}>Delivered</p>
-                      <p className="text-sm font-medium" style={{ color: "#22c55e" }}>{deliveredCount} / {totalLogs}</p>
-                    </div>
-                  </div>
-                </motion.div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Quick Summary Insight */}
-      {targetVoters.length > 0 && (
+      {/* Quick Summary Insight is commented out for minimal overview */}
+      {false && targetVoters.length > 0 && (
         <div className="insight-text-box mt-6">
           <p>
             This scheme targets <strong style={{ color: "var(--accent)" }}>{targetVoters.length}</strong> {scheme.category.toLowerCase()} in the selected booth.
@@ -911,7 +937,7 @@ function TrackingTab({ campaigns, analytics }) {
 // ═══════════════════════════════════════
 // ── APPLICATION TRACKING TAB ──
 // ═══════════════════════════════════════
-function ApplicationsTab({ scheme, applications, analytics }) {
+function ApplicationsTab({ scheme, applications, analytics, onAddApplication, appError, appLoading }) {
   const [filter, setFilter] = useState("all")
 
   const filteredApps = filter === "all" ? applications : applications.filter(a => a.status === filter)
@@ -941,6 +967,27 @@ function ApplicationsTab({ scheme, applications, analytics }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+      <div className="flex items-center justify-end gap-2 mb-3">
+        <button
+          onClick={onAddApplication}
+          disabled={appLoading}
+          className="px-3 py-1.5 rounded text-xs transition-all"
+          style={{
+            background: appLoading ? "var(--border)" : "var(--accent-dim)",
+            border: appLoading ? "1px solid var(--border)" : "1px solid rgba(200,255,0,0.25)",
+            color: appLoading ? "var(--text-muted)" : "var(--accent)",
+            fontFamily: "'DM Mono', monospace",
+            fontSize: "9px",
+          }}
+        >
+          {appLoading ? "Recording..." : "Register Application"}
+        </button>
+        {appError && (
+          <span className="text-xs" style={{ color: "#f87171", fontFamily: "'DM Mono', monospace" }}>
+            {appError}
+          </span>
+        )}
+      </div>
       {/* Analytics Summary */}
       {analytics && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">

@@ -13,11 +13,26 @@ export function generateApplicationData(scheme, targetVoters) {
 
     if (rand < 0.60) {
       status = "applied"
+
       // Random date between registration start and now
-      const start = new Date(scheme.registrationStart)
       const now = new Date()
-      const randomTime = start.getTime() + Math.random() * (now.getTime() - start.getTime())
-      appliedAt = new Date(randomTime).toISOString()
+      let start = new Date(scheme.registrationStart)
+
+      // if start is invalid or in future, fallback to 30 days ago
+      if (Number.isNaN(start.getTime()) || start.getTime() > now.getTime()) {
+        start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      }
+
+      const minTime = start.getTime()
+      const maxTime = now.getTime()
+      const randomTime = minTime + Math.random() * (maxTime - minTime)
+      appliedAt = new Date(randomTime)
+
+      if (Number.isNaN(appliedAt.getTime())) {
+        appliedAt = now
+      }
+
+      appliedAt = appliedAt.toISOString()
     } else if (rand < 0.75) {
       status = "in-progress"
       appliedAt = null

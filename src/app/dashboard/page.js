@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { segmentVoters } from "../../lib/segmentVoters.js";
-import { getSchemes } from "../../lib/getSchemes.js";
+import { fetchSchemes } from "../../lib/api/schemes";
 import CategoryChart from "../../components/CategoryChart";
 import AgeChart from "../../components/AgeChart";
 import { generateInsight } from "../../lib/generateInsight";
@@ -12,53 +12,107 @@ import { Wheat, GraduationCap, UserRound, Wrench, Users, BarChart3 } from "lucid
 import BackButton from "../../components/BackButton";
 import ProgressBar from "../../components/ProgressBar";
 
+const getWomenSegment = (rawVoters = [], existing = []) => {
+  const femaleVoters = Array.isArray(rawVoters)
+    ? rawVoters.filter((v) => (v.gender || "").toString().toLowerCase() === "female")
+    : [];
+
+  if (femaleVoters.length > 0) return femaleVoters;
+  if (Array.isArray(existing) && existing.length > 0) return existing;
+  return [];
+};
+
 export default function Dashboard() {
   const router = useRouter();
   const [segments, setSegments] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [recommendedSchemes, setRecommendedSchemes] = useState([]); // Added state for schemes
   const [boothInsight, setBoothInsight] = useState(null);
   const [boothInsightText, setBoothInsightText] = useState("");
   const [allVoters, setAllVoters] = useState([]);
   const [visibleCount, setVisibleCount] = useState(10);
   const LOAD_INCREMENT = 10;
 
+  // New effect to fetch schemes when category is selected
   useEffect(() => {
-    const storedVoters = localStorage.getItem("voters");
-    if (!storedVoters) {
+    if (selectedCategory?.name) {
+      // If "All Voters" is selected, we might want schemes for all categories or handle it differently
+      // For now, let's just fetch generic schemes if "All Voters" or specific schemes if a category matches
+      const categoryToFetch = selectedCategory.name === "All Voters" ? "" : selectedCategory.name;
+      
+      fetchSchemes(categoryToFetch)
+        .then(data => setRecommendedSchemes(data))
+        .catch(err => console.error("Failed to fetch schemes:", err));
+    } else {
+      setRecommendedSchemes([]);
+    }
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    const storedBooth = localStorage.getItem("boothId");
+    if (!storedBooth) {
       router.push("/booth-selection");
       return;
     }
 
-    const voters = JSON.parse(storedVoters);
-    setAllVoters(voters);
+    const storedAnalysis = localStorage.getItem("boothAnalysis");
+    if (storedAnalysis) {
+      try {
+        const analysis = JSON.parse(storedAnalysis);
+        if (analysis?.segments) {
+          setSegments({
+            ...analysis.segments,
+            women: getWomenSegment(analysis?.raw?.voters, analysis.segments?.women ?? analysis.segments?.others),
+          });
+        }
+        if (analysis?.summary) {
+          setBoothInsight({
+            total: analysis.summary.totalVoters,
+            avgAge: analysis.summary.avgAge,
+            majorGroup: analysis.summary.dominantCategory,
+          });
+          setBoothInsightText(analysis.summary.insightText);
+        }
+        if (analysis?.raw?.voters) {
+          setAllVoters(analysis.raw.voters);
+        }
+      } catch {
+        /* ignore parse errors */
+      }
+    }
 
-    // 2. Define 'result' BEFORE using it
-    const result = segmentVoters(voters);
-    setSegments(result);
+    // Fetch latest dashboard data (fallback if we did not have stored analysis)
+    const fetchDashboard = async () => {
+      try {
+        const res = await fetch(`/api/dashboard/${storedBooth}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.success) return;
 
-    // 3. Generate insight using the defined result
-    const insight = generateInsight(voters, result);
-    setBoothInsightText(insight);
+        const normalizedSegments = {
+          farmers: data.segments?.farmers || [],
+          students: data.segments?.students || [],
+          seniorCitizens: data.segments?.seniorCitizens || [],
+          workers: data.segments?.workers || [],
+          women: getWomenSegment(data.raw?.voters, data.segments?.women ?? data.segments?.others ?? []),
+        };
 
-    // Calculate booth summary
-    const total = voters.length;
-    const avgAge = voters.reduce((sum, v) => sum + v.age, 0) / total;
+        setSegments(normalizedSegments);
+        setBoothInsight({
+          total: data.summary.totalVoters,
+          avgAge: data.summary.avgAge,
+          majorGroup: data.summary.dominantCategory,
+        });
+        setBoothInsightText(data.summary.insightText);
+        setAllVoters(data.raw?.voters || []);
 
-    const categories = [
-      { name: "Farmers", count: result.farmers.length },
-      { name: "Students", count: result.students.length },
-      { name: "Senior Citizens", count: result.seniorCitizens.length },
-      { name: "Workers", count: result.workers.length },
-      { name: "Others", count: result.others.length },
-    ];
+        localStorage.setItem("boothAnalysis", JSON.stringify(data));
+      } catch (err) {
+        console.warn("Failed to fetch dashboard data:", err);
+      }
+    };
 
-    const major = categories.sort((a, b) => b.count - a.count)[0];
-
-    setBoothInsight({
-      total,
-      avgAge: avgAge.toFixed(1),
-      majorGroup: major.name,
-    });
+    fetchDashboard();
   }, [router]);
 
   if (!segments) {
@@ -154,10 +208,10 @@ export default function Dashboard() {
                   }}
                 />
                 <CategoryCard
-                  title="Others"
-                  voters={segments.others}
+                  title="Women"
+                  voters={segments.women}
                   onClick={() =>
-                    setSelectedCategory({ name: "Others", voters: segments.others })
+                    setSelectedCategory({ name: "Women", voters: segments.women })
                   }
                 />
                 <CategoryCard
@@ -167,7 +221,7 @@ export default function Dashboard() {
                     ...segments.students,
                     ...segments.seniorCitizens,
                     ...segments.workers,
-                    ...segments.others,
+                    ...(segments.women || []),
                   ]}
                   onClick={() => {
                     setSelectedCategory({
@@ -177,7 +231,7 @@ export default function Dashboard() {
                         ...segments.students,
                         ...segments.seniorCitizens,
                         ...segments.workers,
-                        ...segments.others,
+                        ...segments.women,
                       ],
                     })
                     setVisibleCount(LOAD_INCREMENT)
@@ -208,7 +262,7 @@ export default function Dashboard() {
               <ul className="space-y-2 mb-6 max-h-96 overflow-y-auto">
                 {selectedCategory.voters.slice(0, visibleCount).map((voter, index) => (
                   <li key={index} className="inner-card text-slate-200 text-sm">
-                    {voter.name} — Age {voter.age} — {voter.occupation}
+                    {voter.name} | Age {voter.age}
                   </li>
                 ))}
               </ul>
@@ -246,14 +300,18 @@ export default function Dashboard() {
                   </button>
                 </div>
               )}
-              <h3 className="text-base md:text-lg font-semibold mb-2 text-white">
+              {/* <h3 className="text-base md:text-lg font-semibold mb-2 text-white">
                 Recommended Government Schemes
               </h3>
               <ul className="list-disc ml-6 text-slate-300 text-sm space-y-1">
-                {getSchemes(selectedCategory.name).map((scheme, index) => (
-                  <li key={index}>{scheme}</li>
-                ))}
-              </ul>
+                {recommendedSchemes.length > 0 ? (
+                  recommendedSchemes.map((scheme) => (
+                    <li key={scheme.id || scheme.scheme_id}>{scheme.name || scheme.scheme_name}</li>
+                  ))
+                ) : (
+                  <li>No schemes found for this category.</li>
+                )}
+              </ul> */}
               {/* <button
                 className="mt-6 primary-button text-white"
                 onClick={() => router.push("/notifications")}
@@ -325,17 +383,18 @@ export default function Dashboard() {
   );
 }
 
-function CategoryCard({ title, voters, onClick }) {
+function CategoryCard({ title, voters = [], onClick }) {
   const iconMap = {
     Farmers: Wheat,
     Students: GraduationCap,
     "Senior Citizens": UserRound,
     Workers: Wrench,
-    Others: Users,
+    Women: Users,
     "All Voters": BarChart3,
   };
 
   const Icon = iconMap[title] || Users;
+  const voterCount = Array.isArray(voters) ? voters.length : 0;
 
   return (
     <div
@@ -344,7 +403,7 @@ function CategoryCard({ title, voters, onClick }) {
     >
       <div className="mb-2"><Icon size={22} style={{ color: "var(--text-secondary)" }} /></div>
       <h2 className="text-xs md:text-sm font-semibold text-white mb-1">{title}</h2>
-      <p className="text-xs text-slate-400">{voters.length} voters</p>
+      <p className="text-xs text-slate-400">{voterCount} voters</p>
     </div>
   );
 }

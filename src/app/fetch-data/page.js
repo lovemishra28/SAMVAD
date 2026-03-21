@@ -49,9 +49,21 @@ export default function FetchData() {
       setStagesDone(prev => [...prev, i])
     }
 
-    const res = await fetch("/api/voters")
+    const res = await fetch(`/api/voters?boothId=${boothId}`)
     const data = await res.json()
     localStorage.setItem("voters", JSON.stringify(data.voters))
+
+    // Prefetch AI analysis for the selected booth (phase 2)
+    try {
+      const analysisRes = await fetch(`/api/booth/${boothId}/analyze`)
+      if (analysisRes.ok) {
+        const analysis = await analysisRes.json()
+        localStorage.setItem("boothAnalysis", JSON.stringify(analysis))
+      }
+    } catch (err) {
+      console.warn("Failed to prefetch booth analysis:", err)
+    }
+
     setVoterCount(data.voters.length)
     setFetchState("done")
 

@@ -10,7 +10,8 @@ import {
   Send, AlertCircle
 } from "lucide-react"
 import BackButton from "../../components/BackButton"
-import { SCHEMES_DATABASE, getSchemesByCategory, getAllCategories, getDaysUntilDeadline } from "../../lib/schemesData"
+import { getDaysUntilDeadline } from "../../lib/schemeUtils"
+import { fetchSchemes, createScheme } from "../../lib/api/schemes"
 import { getNotificationSummary, getNotificationsForCategory, getNotificationsForScheme } from "../../lib/notificationStore"
 
 const CATEGORY_ICONS = {
@@ -18,7 +19,7 @@ const CATEGORY_ICONS = {
   Students: GraduationCap,
   "Senior Citizens": UserRound,
   Workers: Wrench,
-  Others: Users,
+  Women: Users,
 }
 
 const CATEGORY_COLORS = {
@@ -26,7 +27,7 @@ const CATEGORY_COLORS = {
   Students: "#3b82f6",
   "Senior Citizens": "#f59e0b",
   Workers: "#8b5cf6",
-  Others: "#ec4899",
+  Women: "#ec4899",
 }
 
 const STATUS_CONFIG = {
@@ -48,7 +49,8 @@ export default function SchemesManagement() {
   const [activeFilter, setActiveFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [showAddModal, setShowAddModal] = useState(false)
-  const [schemes, setSchemes] = useState(SCHEMES_DATABASE)
+  const [schemes, setSchemes] = useState([])
+  const [loading, setLoading] = useState(true)
   const [notifSummary, setNotifSummary] = useState({})
   const [schemeNotifications, setSchemeNotifications] = useState({})
 
@@ -59,9 +61,28 @@ export default function SchemesManagement() {
     beneficiaryGroup: "", portalUrl: "",
   })
 
-  const categories = getAllCategories()
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(schemes.map((s) => s.category).filter(Boolean)))
+    return cats.length ? cats : ["Farmers", "Students", "Senior Citizens", "Workers", "Women"]
+  }, [schemes])
 
   // Load notification data on mount
+  useEffect(() => {
+    const loadSchemes = async () => {
+      setLoading(true)
+      try {
+        const data = await fetchSchemes()
+        setSchemes(data)
+      } catch (err) {
+        console.warn("Failed to load schemes:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadSchemes()
+  }, [])
+
   useEffect(() => {
     const summary = getNotificationSummary()
     setNotifSummary(summary)
@@ -144,17 +165,36 @@ export default function SchemesManagement() {
     }))
   }, [schemes, categories, notifSummary])
 
-  const handleAddScheme = () => {
+  if (loading) {
+    return (
+      <div className="min-h-[calc(100vh-70px)] flex items-center justify-center p-4 md:p-6">
+        <div style={{ color: "var(--text-secondary)" }}>Loading schemes...</div>
+      </div>
+    )
+  }
+
+  const handleAddScheme = async () => {
     if (!newScheme.name || !newScheme.description) return
-    const id = `SCH${String(schemes.length + 1).padStart(3, "0")}`
-    const scheme = { ...newScheme, id, status: "upcoming" }
-    setSchemes(prev => [...prev, scheme])
-    setShowAddModal(false)
-    setNewScheme({
-      name: "", description: "", category: "Farmers",
-      launchDate: "", registrationStart: "", registrationDeadline: "",
-      beneficiaryGroup: "", portalUrl: "",
-    })
+
+    try {
+      const created = await createScheme({
+        scheme_name: newScheme.name,
+        category: newScheme.category,
+        issue_targeted: newScheme.category,
+        description: newScheme.description,
+        deadline: newScheme.registrationDeadline || null,
+      })
+
+      setSchemes((prev) => [...prev, created])
+      setShowAddModal(false)
+      setNewScheme({
+        name: "", description: "", category: "Farmers",
+        launchDate: "", registrationStart: "", registrationDeadline: "",
+        beneficiaryGroup: "", portalUrl: "",
+      })
+    } catch (err) {
+      console.error("Failed to create scheme", err)
+    }
   }
 
   // Helper to get latest notification info for a scheme
@@ -352,8 +392,8 @@ export default function SchemesManagement() {
                           {statusCfg.label}
                         </span>
 
-                        {/* ── Notification Status Badge ── */}
-                        {notifInfo ? (
+                        {/* ── Notification Status Badge (hidden per request) ── */}
+                        {false && (notifInfo ? (
                           <span
                             className="flex items-center gap-1 px-2 py-0.5 rounded text-xs shrink-0"
                             style={{
@@ -383,7 +423,7 @@ export default function SchemesManagement() {
                             <AlertCircle size={10} />
                             Awaiting Notification
                           </span>
-                        )}
+                        ))}
                       </div>
 
                       <p className="text-xs mb-2 line-clamp-1" style={{ color: "var(--text-secondary)" }}>
@@ -408,7 +448,7 @@ export default function SchemesManagement() {
                       </div>
 
                       {/* ── Notification Metadata Row ── */}
-                      {notifInfo && (
+                      {false && notifInfo && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
