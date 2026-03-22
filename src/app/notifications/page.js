@@ -41,7 +41,7 @@ const normalizeCategoryToSegmentKey = (category) => {
   if (lower.includes("senior")) return "seniorCitizens"
   if (lower.includes("worker") || lower.includes("labor") || lower.includes("labour")) return "workers"
   if (lower.includes("women")) return "women"
-  if (lower.includes("other")) return "women"
+  if (lower.includes("other")) return "others"
   return null
 }
 
@@ -60,8 +60,10 @@ export default function Notifications() {
   const SCHEME_INCREMENT = 6
   const [loggedCategoryStatus, setLoggedCategoryStatus] = useState([])
   const [allSchemes, setAllSchemes] = useState([])
+  const [activeBoothId, setActiveBoothId] = useState("")
 
   useEffect(() => {
+    setActiveBoothId(localStorage.getItem("boothId") || "")
     // Load all schemes from backend first, fallback if API fails or empty
     fetchSchemes().then((schemes) => {
       if (!Array.isArray(schemes) || schemes.length === 0) {
@@ -125,14 +127,15 @@ export default function Notifications() {
   const logCategoryMap = useMemo(() => {
     const m = {}
     loggedCategoryStatus.forEach((entry) => {
-      if (entry && entry.category) {
+      // Filter by activeBoothId so that locks and green ticks only apply to the current booth
+      if (entry && entry.category && entry.boothId === activeBoothId) {
         m[entry.category] = {
           lastSentAt: entry.lastSentAt ? new Date(entry.lastSentAt) : null,
         }
       }
     })
     return m
-  }, [loggedCategoryStatus])
+  }, [loggedCategoryStatus, activeBoothId])
 
   const LOCK_MINUTES = 60
   const isCategoryLocked = (category) => {
@@ -155,9 +158,6 @@ export default function Notifications() {
     if (!selectedCategory) return "Select a category to send"
     if (isCategoryLocked(selectedCategory)) {
       return "⏳ Recently sent - wait before re-sending"
-    }
-    if (logCategoryMap[selectedCategory]) {
-      return "✓ Previously sent this category"
     }
     return `Send Notifications to All ${selectedCategory}`
   }
@@ -353,8 +353,10 @@ export default function Notifications() {
             {Object.entries(categoryMap).map(([name, voters]) => {
               const Icon = CATEGORY_ICONS[name] || Users
               const isSelected = selectedCategory === name
-              const logged = Boolean(logCategoryMap[name])
-              const isLocked = isCategoryLocked(name)
+                const isLocked = isCategoryLocked(name)
+                // We consider it "logged" and show the tick only if it is currently locked by time,
+                // so the tick removed after the cooldown period as requested.
+                const logged = isLocked
               return (
                 <motion.button
                   key={name}
@@ -483,7 +485,7 @@ export default function Notifications() {
           </AnimatePresence>
 
           <AnimatePresence>
-            {selectedCategory && logCategoryMap[selectedCategory] && !done && (
+            {selectedCategory && isCategoryLocked(selectedCategory) && !done && ( 
               <motion.div
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}

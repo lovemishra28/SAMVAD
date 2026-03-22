@@ -95,6 +95,7 @@ export default function Dashboard() {
           seniorCitizens: data.segments?.seniorCitizens || [],
           workers: data.segments?.workers || [],
           women: getWomenSegment(data.raw?.voters, data.segments?.women ?? data.segments?.others ?? []),
+          others: data.segments?.others || [],
         };
 
         setSegments(normalizedSegments);
@@ -221,7 +222,7 @@ export default function Dashboard() {
                     ...segments.students,
                     ...segments.seniorCitizens,
                     ...segments.workers,
-                    ...(segments.women || []),
+                    ...(segments.others || []),
                   ]}
                   onClick={() => {
                     setSelectedCategory({
@@ -231,7 +232,7 @@ export default function Dashboard() {
                         ...segments.students,
                         ...segments.seniorCitizens,
                         ...segments.workers,
-                        ...segments.women,
+                        ...(segments.others || []),
                       ],
                     })
                     setVisibleCount(LOAD_INCREMENT)
