@@ -99,11 +99,34 @@ export default function Notifications() {
   }, [segments, categoryNames])
 
   useEffect(() => {
+    const storedAnalysis = localStorage.getItem("boothAnalysis")
     const storedVoters = localStorage.getItem("voters")
+
+    if (storedAnalysis) {
+      try {
+        const analysis = JSON.parse(storedAnalysis)
+        if (analysis?.segments) {
+          const normalized = {
+            ...analysis.segments,
+            women: Array.isArray(analysis.segments?.women)
+              ? analysis.segments.women
+              : (Array.isArray(analysis.raw?.voters)
+                ? analysis.raw.voters.filter((v) => (v.gender || "").toString().toLowerCase() === "female")
+                : []),
+          }
+          setSegments(normalized)
+          return
+        }
+      } catch (err) {
+        console.warn("Invalid boothAnalysis in localStorage", err)
+      }
+    }
+
     if (!storedVoters) {
       router.push("/booth-selection")
       return
     }
+
     const voters = JSON.parse(storedVoters)
     const result = segmentVoters(voters)
     setSegments(result)

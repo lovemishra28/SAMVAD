@@ -8,25 +8,57 @@ export function segmentVoters(voters) {
     others: [],
   };
 
-  voters.forEach((voter) => {
-    const gender = (voter.gender || "").toString().toLowerCase();
-    
-    // Sync with backend hard-lock category rules
-    const validBaseCats = ["Farmer", "Worker", "Student", "Senior Citizen"];
-    const primaryCat = validBaseCats.includes(voter.occupation) 
-      ? voter.occupation 
-      : (voter.category || "");
+  if (!Array.isArray(voters)) return segments;
 
-    if (primaryCat === "Farmer") {
+  voters.forEach((voter) => {
+    const gender = (voter.gender || "").toString().toLowerCase().trim();
+    const occupation = (voter.occupation || "").toString().toLowerCase().trim();
+    const category = (voter.category || "").toString().toLowerCase().trim();
+    const age = Number(voter.age);
+
+    const combined = `${occupation} ${category}`.trim();
+    let assigned = false;
+
+    if (combined.includes("farmer") || combined.includes("agriculture")) {
       segments.farmers.push(voter);
-    } else if (primaryCat === "Student" || (!primaryCat && voter.age < 25)) {
+      assigned = true;
+    } else if (
+      combined.includes("student") ||
+      combined.includes("school") ||
+      combined.includes("college") ||
+      combined.includes("youth")
+    ) {
       segments.students.push(voter);
-    } else if (primaryCat === "Senior Citizen" || (!primaryCat && voter.age > 60)) {
+      assigned = true;
+    } else if (combined.includes("senior")) {
       segments.seniorCitizens.push(voter);
-    } else if (primaryCat === "Worker") {
+      assigned = true;
+    } else if (
+      combined.includes("worker") ||
+      combined.includes("labor") ||
+      combined.includes("labour")
+    ) {
       segments.workers.push(voter);
-    } else {
-      segments.others.push(voter);
+      assigned = true;
+    } else if (!assigned) {
+      if (!Number.isNaN(age)) {
+        if (age < 25) {
+          segments.students.push(voter);
+          assigned = true;
+        } else if (age >= 60) {
+          segments.seniorCitizens.push(voter);
+          assigned = true;
+        }
+      }
+    }
+
+    if (!assigned) {
+      // If category explicitly says women, do not reassign from others because women is cross-cutting.
+      if (combined.includes("women") || combined.includes("woman")) {
+        // no extra action; it's still valid as non-other if role category is unknown
+      } else {
+        segments.others.push(voter);
+      }
     }
 
     if (gender === "female") {
