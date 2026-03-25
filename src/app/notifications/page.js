@@ -355,7 +355,7 @@ export default function Notifications() {
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.2 }}
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5"
-            style={{ background: "var(--accent-dim)", border: "1px solid rgba(200,255,0,0.15)" }}
+            style={{ background: "var(--accent-dim)", border: "1px solid rgba(0,164,206,0.15)" }}
           >
             <Send size={28} style={{ color: "var(--accent)" }} />
           </motion.div>
@@ -395,7 +395,7 @@ export default function Notifications() {
                   className="p-3 rounded-lg text-left transition-all relative"
                   style={{
                     background: isSelected ? "var(--accent-dim)" : "var(--bg)",
-                    border: `1px solid ${isSelected ? "rgba(200,255,0,0.3)" : logged ? "rgba(34,197,94,0.25)" : "var(--border)"}`,
+                    border: `1px solid ${isSelected ? "rgba(0,164,206,0.3)" : logged ? "rgba(0,164,206,0.25)" : "var(--border)"}`,
                     borderRadius: "var(--radius-sm)",
                     opacity: isLocked ? 0.6 : 1,
                   }}
@@ -411,10 +411,10 @@ export default function Notifications() {
                   {logged && (
                     <div
                       className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 rounded-full"
-                      style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)" }}
+                      style={{ background: "var(--accent-dim)", border: "1px solid rgba(0,164,206,0.3)" }}
                       title="Category has logged notifications"
                     >
-                      <Check size={10} style={{ color: "#22c55e" }} />
+                      <Check size={10} style={{ color: "var(--accent)" }} />
                     </div>
                   )}
                 </motion.button>
@@ -452,7 +452,7 @@ export default function Notifications() {
                         className="text-xs px-3 py-1.5 rounded-lg transition-all"
                         style={{
                           background: "var(--accent-dim)",
-                          border: "1px solid rgba(200,255,0,0.2)",
+                          border: "1px solid rgba(0,164,206,0.2)",
                           color: "var(--accent)",
                           fontFamily: "'DM Mono', monospace",
                           fontSize: "10px",
@@ -492,7 +492,7 @@ export default function Notifications() {
                         className="text-xs px-3 py-1.5 rounded-lg transition-all"
                         style={{
                           background: "var(--accent-dim)",
-                          border: "1px solid rgba(200,255,0,0.2)",
+                          border: "1px solid rgba(0,164,206,0.2)",
                           color: "var(--accent)",
                           fontFamily: "'DM Mono', monospace",
                           fontSize: "10px",

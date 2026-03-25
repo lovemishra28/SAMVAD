@@ -8,6 +8,8 @@ import { MapPin, Navigation, Check, Loader } from "lucide-react";
 import BackButton from "../../components/BackButton";
 import ProgressBar from "../../components/ProgressBar";
 
+import { useTheme } from "../../components/ThemeProvider";
+
 const DEFAULT_CENTER = [23.47, 77.94]; // Madhya Pradesh center
 const DEFAULT_ZOOM = 6;
 
@@ -32,6 +34,7 @@ const MapInner = dynamic(
         selectedBoothId,
         userLocation,
         onBoothClick,
+        effectiveTheme
       }) {
         const L = require("leaflet");
 
@@ -41,10 +44,10 @@ const MapInner = dynamic(
             className: "",
             html: `<div style="
         width:${isSelected ? 20 : 14}px;height:${isSelected ? 20 : 14}px;
-        background:${isSelected ? "#c8ff00" : "rgba(200,255,0,0.5)"};
-        border:2px solid #c8ff00;
+        background:${isSelected ? "#00A4CE" : "rgba(0,164,206,0.5)"};
+        border:2px solid #00A4CE;
         border-radius:50%;
-        box-shadow:0 0 ${isSelected ? 16 : 8}px rgba(200,255,0,${isSelected ? 0.6 : 0.3});
+        box-shadow:0 0 ${isSelected ? 16 : 8}px rgba(0,164,206,${isSelected ? 0.6 : 0.3});
         transition:all 0.3s ease;
       "></div>`,
             iconSize: [isSelected ? 20 : 14, isSelected ? 20 : 14],
@@ -82,7 +85,13 @@ const MapInner = dynamic(
             zoomControl={false}
             attributionControl={false}
           >
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+            <TileLayer
+              url={
+                effectiveTheme === "light"
+                  ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                  : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              }
+            />
             <MapUpdater center={center} zoom={zoom} />
 
             {userLocation && (
@@ -166,6 +175,9 @@ function getDistance(lat1, lng1, lat2, lng2) {
 }
 
 export default function BoothSelection() {
+  const { theme } = useTheme();
+  // We should default to dark or light if system isn't matching, let's assume 'dark' is default unless modified. Theme context usually handles its exact name.
+  const effectiveTheme = theme === "system" ? "dark" : theme || "dark";
   const [booths, setBooths] = useState([]);
   const [boothsLoading, setBoothsLoading] = useState(true);
   const [boothId, setBoothId] = useState("");
@@ -288,7 +300,7 @@ export default function BoothSelection() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="flex items-center gap-2 mb-4 p-3 rounded-lg"
-          style={{ background: "var(--accent-dim)", border: "1px solid rgba(200,255,0,0.15)" }}
+          style={{ background: "var(--accent-dim)", border: "1px solid rgba(0,164,206,0.15)" }}
         >
           <Loader size={14} className="animate-spin" style={{ color: "var(--accent)" }} />
           <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Detecting nearest booth from your location...</span>
@@ -300,7 +312,7 @@ export default function BoothSelection() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-2 mb-4 p-3 rounded-lg"
-          style={{ background: "var(--accent-dim)", border: "1px solid rgba(200,255,0,0.15)" }}
+          style={{ background: "var(--accent-dim)", border: "1px solid rgba(0,164,206,0.15)" }}
         >
           <Navigation size={14} style={{ color: "var(--accent)" }} />
           <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{nearestBoothMsg}</span>
@@ -326,6 +338,7 @@ export default function BoothSelection() {
           selectedBoothId={boothId}
           userLocation={userLocation}
           onBoothClick={handleBoothClick}
+          effectiveTheme={effectiveTheme}
         />
         {/* Map overlay label */}
         <div

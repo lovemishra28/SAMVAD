@@ -8,7 +8,7 @@ import {
   Send, Bell, Clock, Calendar, ExternalLink, Shield,
   Check, X, AlertTriangle, TrendingUp, BarChart3,
   Phone, MessageSquare, ChevronDown, Radio, FileCheck,
-  Loader, RefreshCw, Eye
+  Loader, RefreshCw, Eye, Star
 } from "lucide-react"
 import {
   Chart as ChartJS, ArcElement, BarElement, CategoryScale,
@@ -24,6 +24,7 @@ import { createCampaign } from "../../../lib/api/campaigns"
 import { generateApplicationData, computeApplicationAnalytics } from "../../../lib/applicationTracker"
 import { fetchApplications, createApplication, fetchApplicationAnalytics } from "../../../lib/api/applications"
 import { getNotificationsForCategory, getNotificationsForScheme } from "../../../lib/notificationStore"
+import { fetchAllFeedback } from "../../../lib/api/feedback"
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -385,7 +386,7 @@ export default function SchemeDetail({ params }) {
                   className="flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-all"
                   style={{
                     background: isActive ? "var(--accent-dim)" : "transparent",
-                    border: `1px solid ${isActive ? "rgba(200,255,0,0.25)" : "var(--border)"}`,
+                    border: `1px solid ${isActive ? "rgba(0,164,206,0.25)" : "var(--border)"}`,
                     color: isActive ? "var(--accent)" : "var(--text-secondary)",
                     fontFamily: "'DM Mono', monospace",
                     fontSize: "11px",
@@ -415,6 +416,8 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificati
   const [voterVisibleCount, setVoterVisibleCount] = useState(10)
   const [targetMaxHeight, setTargetMaxHeight] = useState(null)
   const schemeDetailRef = useRef(null)
+  const [schemeFeedback, setSchemeFeedback] = useState([])
+  const [feedbackLoading, setFeedbackLoading] = useState(true)
 
   useLayoutEffect(() => {
     if (schemeDetailRef.current) {
@@ -422,6 +425,21 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificati
       setTargetMaxHeight(height)
     }
   }, [scheme, targetVoters, voterVisibleCount])
+
+  useEffect(() => {
+    if (!scheme) return
+    setFeedbackLoading(true)
+    fetchAllFeedback(scheme.id)
+      .then(fb => setSchemeFeedback(fb.filter(f => f.type === "scheme_feedback")))
+      .catch(() => {})
+      .finally(() => setFeedbackLoading(false))
+  }, [scheme])
+
+  const avgRating = useMemo(() => {
+    const rated = schemeFeedback.filter(f => f.rating)
+    if (rated.length === 0) return 0
+    return Math.round((rated.reduce((s, f) => s + f.rating, 0) / rated.length) * 10) / 10
+  }, [schemeFeedback])
 
   const VOTER_INCREMENT = 10
   const NOTIF_TYPE_LABELS = {
@@ -497,7 +515,7 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificati
                     className="text-xs px-4 py-1.5 rounded-lg transition-all"
                     style={{
                       background: "var(--accent-dim)",
-                      border: "1px solid rgba(200,255,0,0.2)",
+                      border: "1px solid rgba(0,164,206,0.2)",
                       color: "var(--accent)",
                       fontFamily: "'DM Mono', monospace",
                       fontSize: "10px",
@@ -563,6 +581,63 @@ function OverviewTab({ scheme, targetVoters, campaigns, appAnalytics, notificati
           </p>
         </div>
       )}
+      {/* User Feedback Section */}
+      <div className="booth-summary-card mt-6">
+        <h2 style={{ fontSize: "11px", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>
+          User Feedback
+        </h2>
+        {feedbackLoading ? (
+          <div className="text-center py-8">
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Loading feedback...</p>
+          </div>
+        ) : schemeFeedback.length === 0 ? (
+          <div className="text-center py-8">
+            <MessageSquare size={24} className="mx-auto mb-2 opacity-30" style={{ color: "var(--text-muted)" }} />
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>No feedback received yet</p>
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Citizens can rate this scheme from the mobile app</p>
+          </div>
+        ) : (
+          <>
+            {/* Rating Summary */}
+            <div className="flex items-center gap-4 mb-4 p-3 rounded-lg" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+              <div className="text-center">
+                <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "28px", fontWeight: 700, color: "#FFD700", lineHeight: 1 }}>{avgRating}</p>
+                <div style={{ display: "flex", gap: "2px", marginTop: 4, justifyContent: "center" }}>
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star key={i} size={12} style={{ color: i <= Math.round(avgRating) ? "#FFD700" : "#3a3a3a", fill: i <= Math.round(avgRating) ? "#FFD700" : "none" }} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Total Ratings</p>
+                <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "18px", fontWeight: 600, color: "var(--text-primary)" }}>{schemeFeedback.length}</p>
+              </div>
+            </div>
+
+            {/* User Notes */}
+            <div className="space-y-2">
+              {schemeFeedback.filter(f => f.note && f.note.trim()).slice(0, 10).map((f, i) => (
+                <div key={f._id || i} className="p-3 rounded-lg" style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "11px", color: "var(--text-secondary)" }}>
+                      {f.voterName || "Anonymous"}
+                    </span>
+                    <span style={{ display: "inline-flex", gap: "2px" }}>
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <Star key={s} size={10} style={{ color: s <= f.rating ? "#FFD700" : "#3a3a3a", fill: s <= f.rating ? "#FFD700" : "none" }} />
+                      ))}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: "12px", color: "var(--text-primary)", lineHeight: 1.5 }}>{f.note}</p>
+                  <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", color: "var(--text-muted)", marginTop: 4 }}>
+                    {new Date(f.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </motion.div>
   )
 }
@@ -974,7 +1049,7 @@ function ApplicationsTab({ scheme, applications, analytics, onAddApplication, ap
           className="px-3 py-1.5 rounded text-xs transition-all"
           style={{
             background: appLoading ? "var(--border)" : "var(--accent-dim)",
-            border: appLoading ? "1px solid var(--border)" : "1px solid rgba(200,255,0,0.25)",
+            border: appLoading ? "1px solid var(--border)" : "1px solid rgba(0,164,206,0.25)",
             color: appLoading ? "var(--text-muted)" : "var(--accent)",
             fontFamily: "'DM Mono', monospace",
             fontSize: "9px",
@@ -1062,7 +1137,7 @@ function ApplicationsTab({ scheme, applications, analytics, onAddApplication, ap
                   className="px-2 py-1 rounded text-xs transition-all"
                   style={{
                     background: filter === f ? "var(--accent-dim)" : "transparent",
-                    border: `1px solid ${filter === f ? "rgba(200,255,0,0.25)" : "transparent"}`,
+                    border: `1px solid ${filter === f ? "rgba(0,164,206,0.25)" : "transparent"}`,
                     color: filter === f ? "var(--accent)" : "var(--text-muted)",
                     fontFamily: "'DM Mono', monospace",
                     fontSize: "9px",

@@ -8,6 +8,7 @@ import {
 } from "chart.js"
 
 import { Pie } from "react-chartjs-2"
+import { useEffect, useState } from "react"
 
 ChartJS.register(
   ArcElement,
@@ -15,7 +16,20 @@ ChartJS.register(
   Legend
 )
 
+function getCSSVar(name) {
+  if (typeof window === "undefined") return ""
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
+
 export default function CategoryChart({ segments = {} }) {
+  const [themeKey, setThemeKey] = useState(0)
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => setThemeKey(k => k + 1))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
+    return () => observer.disconnect()
+  }, [])
+
   const getCount = (items) => (Array.isArray(items) ? items.length : 0);
 
   const data = {
@@ -43,7 +57,7 @@ export default function CategoryChart({ segments = {} }) {
           "#ef4444"
         ],
         borderWidth: 2,
-        borderColor: "#1a1a1a"
+        borderColor: getCSSVar("--chart-border-color") || "#1a1a1a"
       }
     ]
   }
@@ -56,18 +70,16 @@ export default function CategoryChart({ segments = {} }) {
       legend: {
         position: 'bottom',
         labels: {
-          color: '#e2e8f0',
+          color: getCSSVar("--chart-legend-text") || '#e2e8f0',
           padding: 8,
-          font: {
-            size: 10
-          }
+          font: { size: 10 }
         }
       },
       tooltip: {
-        backgroundColor: '#1a1a1a',
-        titleColor: '#f1f5f9',
-        bodyColor: '#f1f5f9',
-        borderColor: '#2a2a2a',
+        backgroundColor: getCSSVar("--chart-tooltip-bg") || '#1a1a1a',
+        titleColor: getCSSVar("--chart-tooltip-text") || '#f1f5f9',
+        bodyColor: getCSSVar("--chart-tooltip-text") || '#f1f5f9',
+        borderColor: getCSSVar("--chart-tooltip-border") || '#2a2a2a',
         borderWidth: 1
       }
     }
@@ -75,13 +87,13 @@ export default function CategoryChart({ segments = {} }) {
 
   return (
     <div className="chart-card">
-      <h2 className="text-sm md:text-base font-semibold text-center text-white mb-3">
+      <h2 className="text-sm md:text-base font-semibold text-center mb-3" style={{ color: "var(--text-primary)" }}>
         Voter Category Distribution
       </h2>
 
       <div className="flex justify-center">
         <div className="w-full" style={{ maxWidth: '220px', maxHeight: '220px' }}>
-          <Pie data={data} options={options} />
+          <Pie key={themeKey} data={data} options={options} />
         </div>
       </div>
     </div>

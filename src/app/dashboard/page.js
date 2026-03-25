@@ -276,7 +276,7 @@ export default function Dashboard() {
                     className="px-5 py-2 rounded-lg text-xs font-medium transition-all"
                     style={{
                       background: "var(--accent-dim)",
-                      border: "1px solid rgba(200,255,0,0.2)",
+                      border: "1px solid rgba(0,164,206,0.2)",
                       color: "var(--accent)",
                       fontFamily: "'DM Mono', monospace",
                       letterSpacing: "0.04em",

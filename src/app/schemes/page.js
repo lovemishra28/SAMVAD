@@ -262,7 +262,7 @@ export default function SchemesManagement() {
                 className="p-4 rounded-lg text-left transition-all relative"
                 style={{
                   background: isActive ? "var(--accent-dim)" : "var(--surface)",
-                  border: `1px solid ${isActive ? "rgba(200,255,0,0.3)" : "var(--border)"}`,
+                  border: `1px solid ${isActive ? "rgba(0,164,206,0.3)" : "var(--border)"}`,
                   borderRadius: "var(--radius-md)",
                 }}
               >
@@ -321,7 +321,7 @@ export default function SchemesManagement() {
                 className="px-3 py-2 rounded-lg text-xs transition-all"
                 style={{
                   background: statusFilter === s ? "var(--accent-dim)" : "var(--surface)",
-                  border: `1px solid ${statusFilter === s ? "rgba(200,255,0,0.3)" : "var(--border)"}`,
+                  border: `1px solid ${statusFilter === s ? "rgba(0,164,206,0.3)" : "var(--border)"}`,
                   color: statusFilter === s ? "var(--accent)" : "var(--text-secondary)",
                   fontFamily: "'DM Mono', monospace",
                   fontSize: "11px",

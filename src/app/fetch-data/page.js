@@ -89,7 +89,7 @@ export default function FetchData() {
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.2 }}
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5"
-            style={{ background: "var(--accent-dim)", border: "1px solid rgba(200,255,0,0.15)" }}
+            style={{ background: "var(--accent-dim)", border: "1px solid rgba(0,164,206,0.15)" }}
           >
           </motion.div> */}
           <h1 className="text-2xl font-semibold tracking-tight mb-2" style={{ color: "var(--text-primary)" }}>
@@ -206,7 +206,7 @@ export default function FetchData() {
                       className="flex items-center gap-3 p-2.5 rounded-lg"
                       style={{
                         background: isCurrent ? "var(--accent-dim)" : "transparent",
-                        border: isCurrent ? "1px solid rgba(200,255,0,0.12)" : "1px solid transparent",
+                        border: isCurrent ? "1px solid rgba(0,164,206,0.12)" : "1px solid transparent",
                       }}
                     >
                       {(() => { const Icon = isDone ? Check : STAGE_ICONS[i]; return <Icon size={16} style={{ color: isDone ? "var(--text-primary)" : isCurrent ? "var(--accent)" : "var(--text-muted)" }} />; })()}

@@ -10,6 +10,7 @@ import {
 } from "chart.js"
 
 import { Bar } from "react-chartjs-2"
+import { useEffect, useState } from "react"
 
 ChartJS.register(
   BarElement,
@@ -19,7 +20,19 @@ ChartJS.register(
   Legend
 )
 
+function getCSSVar(name) {
+  if (typeof window === "undefined") return ""
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
+
 export default function AgeChart({ voters }) {
+  const [themeKey, setThemeKey] = useState(0)
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => setThemeKey(k => k + 1))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
+    return () => observer.disconnect()
+  }, [])
 
   const groups = {
     "18-25": 0,
@@ -29,13 +42,13 @@ export default function AgeChart({ voters }) {
   }
 
   voters.forEach((voter) => {
-
     if (voter.age <= 25) groups["18-25"]++
     else if (voter.age <= 40) groups["26-40"]++
     else if (voter.age <= 60) groups["41-60"]++
     else groups["60+"]++
-
   })
+
+  const accent = getCSSVar("--accent") || "#00A4CE"
 
   const data = {
     labels: Object.keys(groups),
@@ -43,8 +56,8 @@ export default function AgeChart({ voters }) {
       {
         label: "Voters",
         data: Object.values(groups),
-        backgroundColor: "#6366f1",
-        borderColor: "#4f46e5",
+        backgroundColor: accent,
+        borderColor: accent,
         borderWidth: 1,
         borderRadius: 4
       }
@@ -60,34 +73,30 @@ export default function AgeChart({ voters }) {
         display: false
       },
       tooltip: {
-        backgroundColor: '#1a1a1a',
-        titleColor: '#f1f5f9',
-        bodyColor: '#f1f5f9',
-        borderColor: '#2a2a2a',
+        backgroundColor: getCSSVar("--chart-tooltip-bg") || '#1a1a1a',
+        titleColor: getCSSVar("--chart-tooltip-text") || '#f1f5f9',
+        bodyColor: getCSSVar("--chart-tooltip-text") || '#f1f5f9',
+        borderColor: getCSSVar("--chart-tooltip-border") || '#2a2a2a',
         borderWidth: 1
       }
     },
     scales: {
       x: {
         ticks: {
-          color: '#94a3b8',
-          font: {
-            size: 9
-          }
+          color: getCSSVar("--chart-tick") || '#94a3b8',
+          font: { size: 9 }
         },
         grid: {
-          color: '#222'
+          color: getCSSVar("--chart-grid") || '#222'
         }
       },
       y: {
         ticks: {
-          color: '#94a3b8',
-          font: {
-            size: 9
-          }
+          color: getCSSVar("--chart-tick") || '#94a3b8',
+          font: { size: 9 }
         },
         grid: {
-          color: '#222'
+          color: getCSSVar("--chart-grid") || '#222'
         }
       }
     }
@@ -95,13 +104,13 @@ export default function AgeChart({ voters }) {
 
   return (
     <div className="chart-card">
-      <h2 className="text-sm md:text-base font-semibold text-center text-white mb-3">
+      <h2 className="text-sm md:text-base font-semibold text-center mb-3" style={{ color: "var(--text-primary)" }}>
         Age Distribution
       </h2>
 
       <div className="flex justify-center items-center">
         <div style={{ width: '100%', maxWidth: '280px', maxHeight: '200px' }}>
-          <Bar data={data} options={options} />
+          <Bar key={themeKey} data={data} options={options} />
         </div>
       </div>
     </div>

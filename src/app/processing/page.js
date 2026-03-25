@@ -94,7 +94,7 @@ export default function Processing() {
               scale: { duration: 0.5 },
             }}
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5"
-            style={{ background: "var(--accent-dim)", border: "1px solid rgba(200,255,0,0.15)" }}
+            style={{ background: "var(--accent-dim)", border: "1px solid rgba(0,164,206,0.15)" }}
           >
             {done ? <Check size={28} style={{ color: "var(--accent)" }} /> : <Cpu size={28} style={{ color: "var(--accent)" }} />}
           </motion.div>
@@ -142,7 +142,7 @@ export default function Processing() {
                   className="flex items-start gap-3 p-2.5 rounded-lg"
                   style={{
                     background: isCurrent ? "var(--accent-dim)" : "transparent",
-                    border: isCurrent ? "1px solid rgba(200,255,0,0.12)" : "1px solid transparent",
+                    border: isCurrent ? "1px solid rgba(0,164,206,0.12)" : "1px solid transparent",
                   }}
                 >
                   {(() => { const Icon = isDone ? Check : STEP_ICONS[i]; return <Icon size={16} className="mt-0.5" style={{ color: isDone ? "var(--text-primary)" : isCurrent ? "var(--accent)" : "var(--text-muted)" }} />; })()}
