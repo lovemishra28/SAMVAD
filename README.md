@@ -86,22 +86,28 @@ SAMVAD solves this through:
 
 ```mermaid
 flowchart TD
-    subgraph Citizens["📱 Citizens (Mobile App)"]
-        A[React Native / Native Android]
-        A -->|JWT Authenticated APIs| C[Node.js / Express API Gateway]
+    subgraph Citizens["Citizens (Mobile App)"]
+        A["React Native / Android App"]
     end
 
-    subgraph Administrators["🖥️ Administrators (Web Portal)"]
-        B[Next.js 16 / React 19 / Leaflet]
-        B -->|API Proxy /api/*| C
+    subgraph Administrators["Administrators (Web Portal)"]
+        B["Next.js 16 / React 19 / Leaflet"]
     end
 
-    subgraph BackendEngine["⚙️ Backend & Intelligence Layer"]
-        C -->|Data Persistence| D[(MongoDB 8.0 Cluster)]
-        C -->|HTTP /predict| E[Flask Python ML Service]
-        E -->|Loads Model| F[scikit-learn Classifier\nvoter_classifier.pkl]
-        C -->|Simulated / Twilio| G[Notification Engine\nWhatsApp / SMS / Voice]
+    subgraph Backend["Backend & Machine Learning Layer"]
+        C["Express 5 REST API Gateway"]
+        D[("MongoDB 8.0 Database")]
+        E["Flask ML Service (Port 5001)"]
+        F["scikit-learn (voter_classifier.pkl)"]
+        G["Notification Engine (WhatsApp / SMS)"]
     end
+
+    A -->|"JWT Authenticated Calls"| C
+    B -->|"Proxy /api/*"| C
+    C -->|"Read / Write"| D
+    C -->|"POST /predict"| E
+    E -->|"Loads Model"| F
+    C -->|"Dispatches Alerts"| G
 ```
 
 ---
