@@ -20,6 +20,16 @@
 </p>
 
 <p align="center">
+  <a href="https://samvad-nu.vercel.app/" target="_blank">
+    <img src="https://img.shields.io/badge/Live_Demo-samvad--nu.vercel.app-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Deployment on Vercel" />
+  </a>
+  <a href="https://samvad-nu.vercel.app/" target="_blank">
+    <img src="https://img.shields.io/badge/Web_App-Online_Preview-0099FF?style=for-the-badge" alt="Web App Online Preview" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://samvad-nu.vercel.app/">🌐 Live Demo</a> •
   <a href="#-about-samvad">About</a> •
   <a href="#-visual-showcase">Showcase</a> •
   <a href="#-system-architecture">Architecture</a> •
