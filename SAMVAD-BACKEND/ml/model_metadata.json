@@ -1,0 +1,29 @@
+{
+  "categories": [
+    "Farmer",
+    "Senior Citizen",
+    "Student",
+    "Worker"
+  ],
+  "feature_columns": [
+    "age",
+    "gender_enc",
+    "area_type_enc",
+    "issue_student",
+    "issue_farmer",
+    "issue_senior",
+    "issue_worker",
+    "age_bucket"
+  ],
+  "training_samples": 10000,
+  "feature_importance": {
+    "age": 0.49647551541231605,
+    "gender_enc": 0.0008908479666123211,
+    "area_type_enc": 0.07630807771414383,
+    "issue_student": 0.0007648452683983362,
+    "issue_farmer": 0.001306875296925512,
+    "issue_senior": 0.0004860122232529348,
+    "issue_worker": 0.0030003259735428274,
+    "age_bucket": 0.4207675001448081
+  }
+}

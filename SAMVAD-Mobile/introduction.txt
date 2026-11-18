@@ -1,0 +1,6 @@
+Hello my name is Aryan
+Hello My name is kuldeep<<<<<<< ours
+Hello my name is Aryan
+=======
+Hello My name is kuldeep
+>>>>>>> theirs

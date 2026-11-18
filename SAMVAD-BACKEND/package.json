@@ -1,0 +1,32 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "node index.js",
+    "start:all": "concurrently --kill-others \"npm:start\" \"npm:ml\"",
+    "seed": "node importData.js",
+    "dev": "concurrently --kill-others \"npm:server\" \"npm:ml\"",
+    "server": "node --watch index.js",
+    "ml": "node scripts/python.js ml/classifier_service.py",
+    "ml:train": "node scripts/python.js ml/train_model.py"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "csvtojson": "^2.0.14",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.3.1",
+    "twilio": "^5.13.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

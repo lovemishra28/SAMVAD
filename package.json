@@ -1,0 +1,22 @@
+{
+  "name": "samvad-local",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "db:start": "node scripts/database.mjs",
+    "db:stop": "docker stop samvad-mongodb",
+    "clean:ports": "node scripts/clean-ports.mjs",
+    "seed": "npm --prefix SAMVAD-BACKEND run seed",
+    "dev": "npm run db:start && node scripts/dev.mjs",
+    "dev:web": "npm --prefix SAMVAD-Web run dev",
+    "dev:server": "npm --prefix SAMVAD-BACKEND run dev",
+    "dev:mobile": "npm --prefix SAMVAD-Mobile start -- --no-interactive",
+    "android": "npm --prefix SAMVAD-Mobile run android -- --no-packager",
+    "build:web": "npm --prefix SAMVAD-Web run build",
+    "check": "npm --prefix SAMVAD-BACKEND test && npm --prefix SAMVAD-Mobile run typecheck && npm --prefix SAMVAD-Mobile test -- --runInBand",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:mobile": "node scripts/mobile-smoke.mjs"
+  },
+  "engines": { "node": ">=22.11.0" }
+}

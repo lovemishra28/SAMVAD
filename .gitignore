@@ -1,0 +1,75 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment Variables (Keep examples, ignore secrets)
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+.env*
+!.env.example
+
+# Python & ML Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Next.js & Frontend Build Outputs
+.next/
+out/
+build/
+dist/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# React Native & Mobile
+*.jsbundle
+.metro-health-check*
+
+# Android Build & Local Config
+.gradle/
+**/android/build/
+**/android/app/build/
+**/android/.gradle/
+**/android/local.properties
+local.properties
+*.iml
+.idea/
+.cxx/
+*.keystore
+!debug.keystore
+.kotlin/
+
+# iOS & macOS
+.DS_Store
+DerivedData/
+**/ios/Pods/
+**/ios/build/
+*.ipa
+**/.xcode.env.local
+
+# Logs & Diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+
+# OS & Temporary
+Thumbs.db
+tmp/
+temp/

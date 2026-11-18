@@ -1,0 +1,1 @@
+const mongoose = require('mongoose'); mongoose.connect('mongodb://localhost:27017/samvad').then(async () => { await mongoose.connection.collection('voters').updateOne({ mobileNumber: '7000000000' }, { \$set: { occupation: '', interests: [] } }); console.log('Updated'); process.exit(0); })
