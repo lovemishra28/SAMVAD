@@ -87,8 +87,8 @@ const MapInner = dynamic(
             <TileLayer
               url={
                 effectiveTheme === "light"
-                  ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                  : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                  ? `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${process.env.NEXT_PUBLIC_CARTO_API_KEY || "cb1_5br3_1_d0486f9c03b306a0e3d9f917"}`
+                  : `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${process.env.NEXT_PUBLIC_CARTO_API_KEY || "cb1_5br3_1_d0486f9c03b306a0e3d9f917"}`
               }
             />
             <MapUpdater center={center} zoom={zoom} />
